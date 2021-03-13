@@ -7,12 +7,19 @@ use std::io::Write;
 use byte::*;
 
 fn main() {
-    let is_iq: bool = false; // false for real signal, true for complex I/Q
-    let buflen = 1024;
-    let nbufs = 10000;
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 3 {
+        eprintln!("Arguments: (real|complex) NUMBER_OF_SAMPLES");
+        return
+    }
+
+    let is_iq: bool = args[1] == "complex";
+    let nsamples: i64 = args[2].parse().unwrap();
+    let buflen: usize = 1024;
+    let nbufs: i64 = nsamples / buflen as i64;
 
     let amplitude: f32 = 32000.0;
-    let mut freq:  f32 = -PI;
+    let init_freq: f32 = -PI;
     let freq_step: f32 = 2.0*PI / (buflen as f32 * nbufs as f32);
     let mut phase: f32 = 0.0;
 
@@ -20,6 +27,9 @@ fn main() {
 
     let mut output = std::io::stdout();
 
+    /* Use an integer counter to avoid accumulating rounding errors
+     * instead of something like freq += freq_step; on each iteration. */
+    let mut sample_counter: i64 = 0;
     for _j in 0..nbufs {
         let mut buf_offset: usize = 0;
         for _i in 0..buflen {
@@ -29,8 +39,9 @@ fn main() {
                 let sample_q = (phase.sin() * amplitude) as i16;
                 buf.write_with(&mut buf_offset, sample_q, LE).unwrap();
             }
+            let freq = init_freq + freq_step * sample_counter as f32;
             phase = (phase + freq) % (2.0*PI);
-            freq += freq_step;
+            sample_counter += 1;
         }
         output.write_all(&buf).unwrap();
     }
