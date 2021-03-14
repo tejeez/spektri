@@ -1,0 +1,12 @@
+[package]
+name = "spektri"
+version = "0.1.0"
+authors = ["Tatu Peltola"]
+edition = "2018"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+byte = "0.2"
+rustfft = "5.0.1"
