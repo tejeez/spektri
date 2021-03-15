@@ -1,4 +1,4 @@
-#!/bin/sh
-(cd testsignal; cargo build)
-(cd spektri; cargo build)
-testsignal/target/debug/testsignal complex 10000000 | spektri/target/debug/spektri
+#!/bin/bash
+(cd testsignal; cargo build --release) &&
+(cd spektri; cargo build --release) &&
+time testsignal/target/release/testsignal complex 100000000 | (time spektri/target/release/spektri)
