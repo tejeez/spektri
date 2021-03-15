@@ -24,7 +24,7 @@ impl DspState {
                 let mut s: f32 = 0.0;
                 // Hann window
                 for i in 0..fftsize {
-                    w[i] = 1.0 - ((i as f32 + 0.5) * PI / fftsize as f32).cos();
+                    w[i] = 1.0 - ((i as f32 + 0.5) * 2.0 * PI / fftsize as f32).cos();
                     s += w[i]; // calculate the sum for normalization
                 }
                 // Include all the scaling factors into the window function.
@@ -54,13 +54,20 @@ impl DspState {
             *acc_bin += fft_bin.re * fft_bin.re + fft_bin.im * fft_bin.im;
         }
         self.accn += 1;
-        let averages = 10000;
+        let averages = 100;
         if self.accn >= averages {
-            // Print the result as ASCII art
-            let mut printbuf: Vec<u8> = vec![10; self.acc.len() + 1];
-            let scaling = 50.0 / self.accn as f32;
+            // Write the result in binary format into stdout
+
+            let mut printbuf: Vec<u8> = vec![0; self.acc.len()];
+
+            // divide accumulator bins by self.accn,
+            // but do it as an addition after conversion to dB scale
+            let db_plus = (self.accn as f32).log10() * -10.0;
+
             for (acc_bin, out) in self.acc.iter().zip(printbuf.iter_mut()) {
-                *out = (32.0 + acc_bin * scaling) as u8;
+                let db = acc_bin.log10() * 10.0 + db_plus;
+                // quantize to 0.5 dB per LSB, full scale at 250
+                *out = (db * 2.0 + 250.0).max(0.0).min(255.0) as u8;
             }
             std::io::stdout().write_all(&printbuf)?;
 
@@ -85,7 +92,7 @@ fn cs16_le_to_cf32(src: &[u8], dst: &mut [Complex<f32>]) {
 }
 
 fn main() -> std::io::Result<()> {
-    let buf_samples: usize = 64;
+    let buf_samples: usize = 1024;
     let overlap_samples: usize = buf_samples / 4;
 
     let mut dsp = DspState::init(buf_samples, 1.0 / std::i16::MAX as f32);
@@ -97,14 +104,18 @@ fn main() -> std::io::Result<()> {
 
     let mut input = std::io::stdin();
 
-    loop {
+    'mainloop: loop {
         // copy the overlapping part to beginning of the buffer
         buf.copy_within((buf_samples - overlap_samples) .. buf_samples, 0);
 
         // read input samples, type convert and write to the rest of the buffer
-        input.read_exact(&mut rawbuf)?;
+        match input.read_exact(&mut rawbuf) {
+            Err (_) => { break 'mainloop; }
+            Ok  (_) => { }
+        }
         cs16_le_to_cf32(&rawbuf, &mut buf[overlap_samples .. buf_samples]);
 
         dsp.process(&buf)?;
     }
+    Ok(())
 }
