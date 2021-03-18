@@ -3,6 +3,7 @@ use std::io::Read;
 use byte::*;
 use rustfft::num_complex::Complex;
 mod dsp;
+mod multifft;
 
 fn cs16_le_to_cf32(src: &[u8], dst: &mut [Complex<f32>]) {
     let mut offset = 0;

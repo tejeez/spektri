@@ -1,17 +1,19 @@
 use rustfft::{FftPlanner, num_complex::Complex};
 use std::f32::consts::PI;
 use std::io::Write;
+use crate::multifft;
 
 // requirements for the buffers given to DspState::process
 pub struct InputBufferSize {
     pub new:     usize, // Number of new samples in each buffer
-    pub overlap: usize, // Overlampping samples in block
+    pub overlap: usize, // Overlampping samples from previous buffer
     pub total:   usize, // Total size of the buffer (new+overlap)
 }
 
 pub struct DspState {
-    ffts_per_buf: usize, // TODO: support multiple FFTs per buffer
-    fft_interval: usize, // TODO: support multiple FFTs per buffer
+    fftsize: usize,
+    ffts_per_buf: usize,
+    fft_interval: usize,
     fft: std::sync::Arc<dyn rustfft::Fft<f32>>, // RustFFT plan
     acc: Vec<f32>, // Accumulator for FFT averaging
     accn: u32, // Counter for number of FFTs averaged
@@ -22,11 +24,12 @@ impl DspState {
     pub fn init(fftsize: usize, scaling: f32) -> (DspState, InputBufferSize) {
         let mut planner = FftPlanner::new();
 
-        let ffts_per_buf = 1; // TODO: support multiple FFTs per buffer
+        let ffts_per_buf = 4;
         let fft_overlap = fftsize / 4; // 25% overlap
         let fft_interval = fftsize - fft_overlap; // FFT is taken every fft_interval samples
 
         (DspState {
+            fftsize: fftsize,
             ffts_per_buf: ffts_per_buf,
             fft_interval: fft_interval,
             fft: planner.plan_fft_forward(fftsize),
@@ -56,43 +59,48 @@ impl DspState {
     }
 
     pub fn process(&mut self, input_buffer: &[Complex<f32>]) -> std::io::Result<()> {
-        // Buffer for FFT calculation
-        let mut fft_buffer: Vec<Complex<f32>> = vec![Complex{re:0.0, im:0.0}; input_buffer.len()];
-        // Apply the window function
-        for (buffer, (input, window)) in fft_buffer.iter_mut().zip(input_buffer.iter().zip(self.window.iter())) {
-            *buffer = Complex{
-                re: input.re * window,
-                im: input.im * window
-            };
-        }
+        // Buffers for FFT results
+        let mut resultbufbuf = vec![Complex{re:0.0, im:0.0}; self.fftsize * self.ffts_per_buf];
+        //let mut resultbufs = resultbufbuf.chunks_mut(self.fftsize);
+        let mut resultbufs: Vec<&mut [Complex<f32>]> = resultbufbuf.chunks_mut(self.fftsize).collect();
 
-        self.fft.process(&mut fft_buffer);
-        for (fft_bin, acc_bin) in fft_buffer.iter().zip(self.acc.iter_mut()) {
-            *acc_bin += fft_bin.re * fft_bin.re + fft_bin.im * fft_bin.im;
-        }
-        self.accn += 1;
-        let averages = 100;
-        if self.accn >= averages {
-            // Write the result in binary format into stdout
+        multifft::process(
+            &self.fft,
+            &self.window,
+            (0..self.ffts_per_buf).map(|i|
+                &input_buffer[i*self.fft_interval .. i*self.fft_interval+self.fftsize]
+            ),
+            &mut resultbufs
+        );
 
-            let mut printbuf: Vec<u8> = vec![0; self.acc.len()];
-
-            // divide accumulator bins by self.accn,
-            // but do it as an addition after conversion to dB scale
-            let db_plus = (self.accn as f32).log10() * -10.0;
-
-            for (acc_bin, out) in self.acc.iter().zip(printbuf.iter_mut()) {
-                let db = acc_bin.log10() * 10.0 + db_plus;
-                // quantize to 0.5 dB per LSB, full scale at 250
-                *out = (db * 2.0 + 250.0).max(0.0).min(255.0) as u8;
+        for fft_result in resultbufs.iter() {
+            for (fft_bin, acc_bin) in fft_result.iter().zip(self.acc.iter_mut()) {
+                *acc_bin += fft_bin.re * fft_bin.re + fft_bin.im * fft_bin.im;
             }
-            std::io::stdout().write_all(&printbuf)?;
+            self.accn += 1;
+            let averages = 100;
+            if self.accn >= averages {
+                // Write the result in binary format into stdout
 
-            // Reset accumulator
-            for acc_bin in self.acc.iter_mut() {
-                *acc_bin = 0.0;
+                let mut printbuf: Vec<u8> = vec![0; self.acc.len()];
+
+                // divide accumulator bins by self.accn,
+                // but do it as an addition after conversion to dB scale
+                let db_plus = (self.accn as f32).log10() * -10.0;
+
+                for (acc_bin, out) in self.acc.iter().zip(printbuf.iter_mut()) {
+                    let db = acc_bin.log10() * 10.0 + db_plus;
+                    // quantize to 0.5 dB per LSB, full scale at 250
+                    *out = (db * 2.0 + 250.0).max(0.0).min(255.0) as u8;
+                }
+                std::io::stdout().write_all(&printbuf)?;
+
+                // Reset accumulator
+                for acc_bin in self.acc.iter_mut() {
+                    *acc_bin = 0.0;
+                }
+                self.accn = 0;
             }
-            self.accn = 0;
         }
         Ok(())
     }
