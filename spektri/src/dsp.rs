@@ -2,7 +2,16 @@ use rustfft::{FftPlanner, num_complex::Complex};
 use std::f32::consts::PI;
 use std::io::Write;
 
+// requirements for the buffers given to DspState::process
+pub struct InputBufferSize {
+    pub new:     usize, // Number of new samples in each buffer
+    pub overlap: usize, // Overlampping samples in block
+    pub total:   usize, // Total size of the buffer (new+overlap)
+}
+
 pub struct DspState {
+    ffts_per_buf: usize, // TODO: support multiple FFTs per buffer
+    fft_interval: usize, // TODO: support multiple FFTs per buffer
     fft: std::sync::Arc<dyn rustfft::Fft<f32>>, // RustFFT plan
     acc: Vec<f32>, // Accumulator for FFT averaging
     accn: u32, // Counter for number of FFTs averaged
@@ -10,9 +19,16 @@ pub struct DspState {
 }
 
 impl DspState {
-    pub fn init(fftsize: usize, scaling: f32) -> DspState {
+    pub fn init(fftsize: usize, scaling: f32) -> (DspState, InputBufferSize) {
         let mut planner = FftPlanner::new();
-        DspState {
+
+        let ffts_per_buf = 1; // TODO: support multiple FFTs per buffer
+        let fft_overlap = fftsize / 4; // 25% overlap
+        let fft_interval = fftsize - fft_overlap; // FFT is taken every fft_interval samples
+
+        (DspState {
+            ffts_per_buf: ffts_per_buf,
+            fft_interval: fft_interval,
             fft: planner.plan_fft_forward(fftsize),
             acc: vec![0.0; fftsize],
             accn: 0,
@@ -32,7 +48,11 @@ impl DspState {
                 }
                 w
             },
-        }
+        }, InputBufferSize {
+            overlap: fft_overlap,
+            new: fft_interval * ffts_per_buf,
+            total: fft_overlap + fft_interval * ffts_per_buf
+        })
     }
 
     pub fn process(&mut self, input_buffer: &[Complex<f32>]) -> std::io::Result<()> {
