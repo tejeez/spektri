@@ -61,15 +61,14 @@ impl DspState {
     pub fn process(&mut self, input_buffer: &[Complex<f32>]) -> std::io::Result<()> {
         // Buffers for FFT results
         let mut resultbufbuf = vec![Complex{re:0.0, im:0.0}; self.fftsize * self.ffts_per_buf];
-        //let mut resultbufs = resultbufbuf.chunks_mut(self.fftsize);
         let mut resultbufs: Vec<&mut [Complex<f32>]> = resultbufbuf.chunks_mut(self.fftsize).collect();
 
         multifft::process(
             &self.fft,
             &self.window,
-            (0..self.ffts_per_buf).map(|i|
+            &(0..self.ffts_per_buf).map(|i|
                 &input_buffer[i*self.fft_interval .. i*self.fft_interval+self.fftsize]
-            ),
+            ).collect::<Vec<&[Complex<f32>]>>(),
             &mut resultbufs
         );
 

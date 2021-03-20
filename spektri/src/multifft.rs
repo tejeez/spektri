@@ -1,6 +1,7 @@
-// Calculation of multiple FFTs (but not yet in parallel)
+// Calculation of multiple FFTs in parallel
 
 use rustfft::num_complex::Complex;
+use rayon::prelude::*;
 
 // Apply a real-valued window function to a complex signal
 fn apply_window(
@@ -17,24 +18,17 @@ fn apply_window(
 }
 
 // Calculate multiple FFTs with a window function
-pub fn process<'a>(
+pub fn process(
     fft: &std::sync::Arc<dyn rustfft::Fft<f32>>, // RustFFT plan
     window: &[f32],
-    inputs:  impl Iterator<Item = &'a    [Complex<f32>]>,
-    //outputs: impl Iterator<Item = &'a mut[Complex<f32>]>,
+    inputs: &[&[Complex<f32>]],
     outputs: &mut[&mut [Complex<f32>]]
 ) {
-    /*for (input, output) in inputs.zip(outputs.iter_mut()) {
+    outputs.par_iter_mut().enumerate().for_each(
+    |(i, output)| {
         // RustFFT does transform in-place, so temporarily
         // write the windowed signal into the output buffer
-        apply_window(window, input, *output);
-        fft.process(*output);
-    }*/
-    inputs.zip(outputs.iter_mut()).for_each(
-    |(input, output)| {
-        // RustFFT does transform in-place, so temporarily
-        // write the windowed signal into the output buffer
-        apply_window(window, input, *output);
+        apply_window(window, inputs[i], *output);
         fft.process(*output);
     });
 }
