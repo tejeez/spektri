@@ -2,6 +2,7 @@ use std;
 use std::io::Read;
 use byte::*;
 use rustfft::num_complex::Complex;
+use rayon::prelude::*;
 mod dsp;
 mod multifft;
 
@@ -13,6 +14,16 @@ fn cs16_le_to_cf32(src: &[u8], dst: &mut [Complex<f32>]) {
             im: src.read_with::<i16>(&mut offset, LE).unwrap() as f32
         }
     }
+}
+
+fn cs16_le_to_cf32_par(src: &[u8], dst: &mut [Complex<f32>]) {
+    dst.par_iter_mut().enumerate().for_each( |(i,v)| {
+        let mut offset = i * 4;
+        *v = Complex{
+            re: src.read_with::<i16>(&mut offset, LE).unwrap() as f32,
+            im: src.read_with::<i16>(&mut offset, LE).unwrap() as f32
+        }
+    });
 }
 
 fn main() -> std::io::Result<()> {
@@ -35,7 +46,7 @@ fn main() -> std::io::Result<()> {
             Err (_) => { break 'mainloop; }
             Ok  (_) => { }
         }
-        cs16_le_to_cf32(&rawbuf, &mut buf[bufsize.overlap .. bufsize.total]);
+        cs16_le_to_cf32_par(&rawbuf, &mut buf[bufsize.overlap .. bufsize.total]);
 
         dsp.process(&buf)?;
     }

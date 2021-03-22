@@ -1,6 +1,7 @@
 use rustfft::{FftPlanner, num_complex::Complex};
 use std::f32::consts::PI;
 use std::io::Write;
+use rayon::prelude::*;
 use crate::multifft;
 
 // requirements for the buffers given to DspState::process
@@ -17,7 +18,8 @@ pub struct DspState {
     fft: std::sync::Arc<dyn rustfft::Fft<f32>>, // RustFFT plan
     acc: Vec<f32>, // Accumulator for FFT averaging
     accn: u32, // Counter for number of FFTs averaged
-    window: Vec<f32>, // Window function
+    window: Vec<f32>, // Window function,
+    fft_result_buf: Vec<Complex<f32>>, // Pre-allocated buffer
 }
 
 impl DspState {
@@ -51,6 +53,7 @@ impl DspState {
                 }
                 w
             },
+            fft_result_buf: vec![Complex{re:0.0, im:0.0}; fftsize * ffts_per_buf],
         }, InputBufferSize {
             overlap: fft_overlap,
             new: fft_interval * ffts_per_buf,
@@ -60,22 +63,26 @@ impl DspState {
 
     pub fn process(&mut self, input_buffer: &[Complex<f32>]) -> std::io::Result<()> {
         // Buffers for FFT results
-        let mut resultbufbuf = vec![Complex{re:0.0, im:0.0}; self.fftsize * self.ffts_per_buf];
-        let mut resultbufs: Vec<&mut [Complex<f32>]> = resultbufbuf.chunks_mut(self.fftsize).collect();
+        //let mut resultbufbuf = vec![Complex{re:0.0, im:0.0}; self.fftsize * self.ffts_per_buf];
+        let fft_interval = self.fft_interval;
+        let fft_size = self.fftsize;
+        let mut resultbufs: Vec<&mut [Complex<f32>]> = self.fft_result_buf.chunks_mut(fft_size).collect();
 
         multifft::process(
             &self.fft,
             &self.window,
             &(0..self.ffts_per_buf).map(|i|
-                &input_buffer[i*self.fft_interval .. i*self.fft_interval+self.fftsize]
+                &input_buffer[i*fft_interval .. i*fft_interval+fft_size]
             ).collect::<Vec<&[Complex<f32>]>>(),
             &mut resultbufs
         );
 
         for fft_result in resultbufs.iter() {
-            for (fft_bin, acc_bin) in fft_result.iter().zip(self.acc.iter_mut()) {
+            self.acc.par_iter_mut().zip(fft_result.par_iter()).for_each(
+                |(acc_bin, fft_bin)|
+            {
                 *acc_bin += fft_bin.re * fft_bin.re + fft_bin.im * fft_bin.im;
-            }
+            });
             self.accn += 1;
             let averages = 100;
             if self.accn >= averages {
