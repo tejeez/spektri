@@ -27,7 +27,17 @@ fn cs16_le_to_cf32_par(src: &[u8], dst: &mut [Complex<f32>]) {
 }
 
 fn main() -> std::io::Result<()> {
-    let (mut dsp, bufsize) = dsp::DspState::init(1024, 1.0 / std::i16::MAX as f32);
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        eprintln!("Arguments: FFT_SIZE");
+        return Ok(())
+    }
+
+    let (mut dsp, bufsize) = dsp::DspState::init(dsp::DspParams {
+        fft_size: args[1].parse().unwrap(),
+        scaling: 1.0 / std::i16::MAX as f32,
+        ffts_per_buf: 4,
+    });
 
     // buffer for raw input data
     let mut rawbuf: Vec<u8> = vec![0; 4 * bufsize.new];

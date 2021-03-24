@@ -4,6 +4,15 @@ use std::io::Write;
 use rayon::prelude::*;
 use crate::multifft;
 
+// Parameters for signal processing
+pub struct DspParams {
+    //pub complex: bool, // Type of input signal: true for I/Q, false for real (TODO)
+    pub fft_size: usize,
+    pub scaling: f32, // Scaling of input values
+    pub ffts_per_buf: usize,
+    //pub fft_overlap: usize, // Fixed for now
+}
+
 // requirements for the buffers given to DspState::process
 pub struct InputBufferSize {
     pub new:     usize, // Number of new samples in each buffer
@@ -12,7 +21,7 @@ pub struct InputBufferSize {
 }
 
 pub struct DspState {
-    fftsize: usize,
+    fft_size: usize,
     ffts_per_buf: usize,
     fft_interval: usize,
     fft: std::sync::Arc<dyn rustfft::Fft<f32>>, // RustFFT plan
@@ -22,50 +31,47 @@ pub struct DspState {
     fft_result_buf: Vec<Complex<f32>>, // Pre-allocated buffer
 }
 
+fn hann_window(size: usize, scaling: f32) -> Vec<f32> {
+    let mut w: Vec<f32> = (0..size).map(|i| {
+        1.0 - ((i as f32 + 0.5) * 2.0 * PI / size as f32).cos()
+    }).collect();
+
+    // Include all the scaling factors into the window function.
+    // Normalize sum over the whole window to the desired scaling.
+    let s: f32 = scaling / w.iter().sum::<f32>();
+    w.iter_mut().for_each(|v| { *v *= s; });
+
+    w
+}
+
 impl DspState {
-    pub fn init(fftsize: usize, scaling: f32) -> (DspState, InputBufferSize) {
+    pub fn init(params: DspParams) -> (DspState, InputBufferSize) {
         let mut planner = FftPlanner::new();
 
-        let ffts_per_buf = 4;
-        let fft_overlap = fftsize / 4; // 25% overlap
-        let fft_interval = fftsize - fft_overlap; // FFT is taken every fft_interval samples
+        let fft_overlap = params.fft_size / 4; // 25% overlap
+        let fft_interval = params.fft_size - fft_overlap; // FFT is taken every fft_interval samples
 
         (DspState {
-            fftsize: fftsize,
-            ffts_per_buf: ffts_per_buf,
+            fft_size: params.fft_size,
+            ffts_per_buf: params.ffts_per_buf,
             fft_interval: fft_interval,
-            fft: planner.plan_fft_forward(fftsize),
-            acc: vec![0.0; fftsize],
+            fft: planner.plan_fft_forward(params.fft_size),
+            acc: vec![0.0; params.fft_size],
             accn: 0,
-            window: {
-                let mut w = vec![0.0; fftsize];
-                let mut s: f32 = 0.0;
-                // Hann window
-                for i in 0..fftsize {
-                    w[i] = 1.0 - ((i as f32 + 0.5) * 2.0 * PI / fftsize as f32).cos();
-                    s += w[i]; // calculate the sum for normalization
-                }
-                // Include all the scaling factors into the window function.
-                // Normalize sum over the whole window to the desired scaling.
-                s = scaling / s;
-                for i in 0..fftsize {
-                    w[i] *= s;
-                }
-                w
-            },
-            fft_result_buf: vec![Complex{re:0.0, im:0.0}; fftsize * ffts_per_buf],
+            window: hann_window(params.fft_size, params.scaling),
+            fft_result_buf: vec![Complex{re:0.0, im:0.0}; params.fft_size * params.ffts_per_buf],
         }, InputBufferSize {
             overlap: fft_overlap,
-            new: fft_interval * ffts_per_buf,
-            total: fft_overlap + fft_interval * ffts_per_buf
+            new: fft_interval * params.ffts_per_buf,
+            total: fft_overlap + fft_interval * params.ffts_per_buf
         })
     }
 
     pub fn process(&mut self, input_buffer: &[Complex<f32>]) -> std::io::Result<()> {
-        // Buffers for FFT results
-        //let mut resultbufbuf = vec![Complex{re:0.0, im:0.0}; self.fftsize * self.ffts_per_buf];
         let fft_interval = self.fft_interval;
-        let fft_size = self.fftsize;
+        let fft_size = self.fft_size;
+
+        // Buffers for FFT results
         let mut resultbufs: Vec<&mut [Complex<f32>]> = self.fft_result_buf.chunks_mut(fft_size).collect();
 
         multifft::process(
