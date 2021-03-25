@@ -6,7 +6,7 @@ use crate::multifft::MultiFft;
 
 // Parameters for signal processing
 pub struct DspParams {
-    //pub complex: bool, // Type of input signal: true for I/Q, false for real (TODO)
+    pub complex: bool, // Type of input signal: true for I/Q, false for real (TODO)
     pub fft_size: usize,
     pub scaling: f32, // Scaling of input values
     pub ffts_per_buf: usize,
@@ -49,7 +49,7 @@ impl DspState {
     pub fn init(params: DspParams) -> (DspState, InputBufferSize) {
         let fft_overlap = params.fft_size / 4; // 25% overlap
         let fft_interval = params.fft_size - fft_overlap; // FFT is taken every fft_interval samples
-        let result_bins = params.fft_size;
+        let result_bins = if params.complex { params.fft_size } else { params.fft_size / 2 + 1 };
 
         (DspState {
             fft_size: params.fft_size,
@@ -68,7 +68,7 @@ impl DspState {
         })
     }
 
-    pub fn process(&mut self, input_buffer: &[Complex<f32>]) -> std::io::Result<()> {
+    pub fn process_complex(&mut self, input_buffer: &[Complex<f32>]) -> std::io::Result<()> {
         let fft_interval = self.fft_interval;
         let fft_size = self.fft_size;
 
@@ -80,6 +80,24 @@ impl DspState {
             &(0..self.ffts_per_buf).map(|i|
                 &input_buffer[i*fft_interval .. i*fft_interval+fft_size]
             ).collect::<Vec<&[Complex<f32>]>>(),
+            &mut resultbufs
+        );
+        self.accu.accumulate(&resultbufs)?;
+        Ok(())
+    }
+
+    pub fn process_real(&mut self, input_buffer: &[f32]) -> std::io::Result<()> {
+        let fft_interval = self.fft_interval;
+        let fft_size = self.fft_size;
+
+        // Buffers for FFT results
+        let mut resultbufs: Vec<&mut [Complex<f32>]> = self.fft_result_buf.chunks_mut(fft_size/2+1).collect();
+
+        self.mfft.process_real(
+            &self.window,
+            &(0..self.ffts_per_buf).map(|i|
+                &input_buffer[i*fft_interval .. i*fft_interval+fft_size]
+            ).collect::<Vec<&[f32]>>(),
             &mut resultbufs
         );
         self.accu.accumulate(&resultbufs)?;
