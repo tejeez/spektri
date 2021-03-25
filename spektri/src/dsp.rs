@@ -1,8 +1,8 @@
-use rustfft::{FftPlanner, num_complex::Complex};
+use rustfft::num_complex::Complex;
 use std::f32::consts::PI;
 use std::io::Write;
 use rayon::prelude::*;
-use crate::multifft;
+use crate::multifft::MultiFft;
 
 // Parameters for signal processing
 pub struct DspParams {
@@ -24,9 +24,10 @@ pub struct DspState {
     fft_size: usize,
     ffts_per_buf: usize,
     fft_interval: usize,
-    fft: std::sync::Arc<dyn rustfft::Fft<f32>>, // RustFFT plan
-    acc: Vec<f32>, // Accumulator for FFT averaging
-    accn: u32, // Counter for number of FFTs averaged
+
+    mfft: MultiFft,
+    accu: SpectrumAccumulator,
+
     window: Vec<f32>, // Window function,
     fft_result_buf: Vec<Complex<f32>>, // Pre-allocated buffer
 }
@@ -46,20 +47,20 @@ fn hann_window(size: usize, scaling: f32) -> Vec<f32> {
 
 impl DspState {
     pub fn init(params: DspParams) -> (DspState, InputBufferSize) {
-        let mut planner = FftPlanner::new();
-
         let fft_overlap = params.fft_size / 4; // 25% overlap
         let fft_interval = params.fft_size - fft_overlap; // FFT is taken every fft_interval samples
+        let result_bins = params.fft_size;
 
         (DspState {
             fft_size: params.fft_size,
             ffts_per_buf: params.ffts_per_buf,
             fft_interval: fft_interval,
-            fft: planner.plan_fft_forward(params.fft_size),
-            acc: vec![0.0; params.fft_size],
-            accn: 0,
+
+            mfft: MultiFft::init(params.fft_size),
+            accu: SpectrumAccumulator::init(result_bins),
+
             window: hann_window(params.fft_size, params.scaling),
-            fft_result_buf: vec![Complex{re:0.0, im:0.0}; params.fft_size * params.ffts_per_buf],
+            fft_result_buf: vec![Complex{re:0.0, im:0.0}; result_bins * params.ffts_per_buf],
         }, InputBufferSize {
             overlap: fft_overlap,
             new: fft_interval * params.ffts_per_buf,
@@ -74,16 +75,43 @@ impl DspState {
         // Buffers for FFT results
         let mut resultbufs: Vec<&mut [Complex<f32>]> = self.fft_result_buf.chunks_mut(fft_size).collect();
 
-        multifft::process(
-            &self.fft,
+        self.mfft.process_complex(
             &self.window,
             &(0..self.ffts_per_buf).map(|i|
                 &input_buffer[i*fft_interval .. i*fft_interval+fft_size]
             ).collect::<Vec<&[Complex<f32>]>>(),
             &mut resultbufs
         );
+        self.accu.accumulate(&resultbufs)?;
+        Ok(())
+    }
+}
 
-        for fft_result in resultbufs.iter() {
+
+
+
+
+struct SpectrumAccumulator {
+    acc: Vec<f32>, // Accumulator for FFT averaging
+    accn: u32, // Counter for number of FFTs averaged
+}
+
+impl SpectrumAccumulator {
+    fn init(
+        n: usize, // Number of bins
+    ) -> SpectrumAccumulator {
+        SpectrumAccumulator {
+            acc: vec![0.0; n],
+            accn: 0,
+        }
+    }
+
+    fn accumulate(
+        &mut self,
+        fft_results: &[&mut[Complex<f32>]],
+        ) -> std::io::Result<()>
+    {
+        for fft_result in fft_results.iter() {
             self.acc.par_iter_mut().zip(fft_result.par_iter()).for_each(
                 |(acc_bin, fft_bin)|
             {
@@ -117,4 +145,3 @@ impl DspState {
         Ok(())
     }
 }
-
