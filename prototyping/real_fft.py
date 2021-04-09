@@ -4,7 +4,7 @@
 import numpy as np
 
 N = 65536 # FFT size
-# Generate two read-valued random signals
+# Generate two real-valued random signals
 s0 = np.random.random(N)
 s1 = np.random.random(N)
 

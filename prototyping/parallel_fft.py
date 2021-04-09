@@ -24,10 +24,10 @@ fp = [np.fft.fft(s[i : N : 4]) * twiddles[i] for i in range(4)]
 
 f2 = np.zeros(N, dtype=np.complex128)
 
-f2[N//4*0 : N//4*1] = fp[0] +      fp[1] + fp[2] +      fp[3]
-f2[N//4*1 : N//4*2] = fp[0] - 1j * fp[1] - fp[2] + 1j * fp[3]
-f2[N//4*2 : N//4*3] = fp[0] -      fp[1] + fp[2] -      fp[3]
-f2[N//4*3 : N//4*4] = fp[0] + 1j * fp[1] - fp[2] - 1j * fp[3]
+f2[N//4*0 : N//4*1] = fp[0] +      fp[1] + ( fp[2] +      fp[3])
+f2[N//4*1 : N//4*2] = fp[0] - 1j * fp[1] + (-fp[2] + 1j * fp[3])
+f2[N//4*2 : N//4*3] = fp[0] -      fp[1] + ( fp[2] -      fp[3])
+f2[N//4*3 : N//4*4] = fp[0] + 1j * fp[1] + (-fp[2] - 1j * fp[3])
 
 def power(v):
     """Energy of a signal"""

@@ -72,7 +72,6 @@ impl MultiFft {
     ) {
         // First, place one signal in real and the other in imaginary part:
         let mut buf: Vec<Complex<f32>> =
-            //input[0].iter().zip(input[1].iter())
             input0.iter().zip(input1.iter()).zip(window.iter())
             .map(|((in0, in1), w)| { Complex{re: *in0 * w, im: *in1 * w} })
             .collect::<Vec<Complex<f32>>>();
