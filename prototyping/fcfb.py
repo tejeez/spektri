@@ -132,14 +132,32 @@ def complex_sine(f, l):
     phase = np.linspace(0, f*l, l, dtype=_REAL)
     return np.cos(phase) + 1j*np.sin(phase)
 
+def power_db(s):
+    """Return the power of a complex signal in dB."""
+    try:
+        return 10.0*math.log10(np.mean(s.real**2) + np.mean(s.imag**2))
+    except ValueError:
+        return -math.inf
+
 def test():
-    params = fcfb_design()
-    # Test the filter with different input frequencies
-    for f in np.linspace(-np.pi, np.pi, 101):
-        r = fcfb(complex_sine(f, 100000), 0, **params)
+    import matplotlib.pyplot as plt
+
+    freqs = np.linspace(-np.pi, np.pi, 2**11+1)
+
+    for method in ['overlap_add', 'overlap_save']:
+        params = fcfb_design(method=method)
+        # Test the filter with different input frequencies.
         # Let's start with a simple test
-        # and just print the total output power
-        print("%6.3f %E" % (f, np.sum(r.real**2) + np.sum(r.imag**2)))
+        # and just plot the total output power.
+        # Discard some first samples of the result to let the output settle.
+        results = [power_db(fcfb(complex_sine(f, 2**12), 50, **params)[32:]) for f in freqs]
+        plt.plot(freqs, results)
+
+    plt.xlabel('Input frequency (radian/s)')
+    plt.ylabel('Output power (dB)')
+    plt.legend(('Overlap and add', 'Overlap and save'))
+    plt.grid()
+    plt.show()
 
 if __name__ == '__main__':
     test()
