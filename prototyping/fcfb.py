@@ -83,12 +83,20 @@ def fcfb(input, freq, prewindow, weights, postwindow, overlap):
     return np.concatenate(outputs)
 
 
-def zprect(l,n):
+def zprect(l,n,t=0):
     """Return a zero-padded rectangular window
     having a total length of l, n ones in the middle
-    and zero-padding at both ends"""
+    and zero-padding at both ends.
+
+    Taper each transition by t samples by convolving the result
+    with a smoothing window.
+    """
     w = np.zeros(l, dtype=_REAL)
     w[(l-n) // 2 : (l+n) // 2] = np.ones(n, dtype=_REAL)
+    if t >= 1:
+        s = np.hanning(t)
+        s = s / np.sum(s) # Normalize scaling
+        w = np.convolve(w, s, mode='same')
     return w
 
 def normalize_window(w):
@@ -96,7 +104,7 @@ def normalize_window(w):
     This results in nicely scaled FFT result values."""
     return w / np.sum(w)
 
-def fcfb_design(method='overlap_add'):
+def fcfb_design(method='overlap_add', taper=0):
     """Design the parameters for a fast-convolution filter bank.
 
     Return the parameters as a dict that can be passed
@@ -106,11 +114,12 @@ def fcfb_design(method='overlap_add'):
     overlap = 0.25
     if method == 'overlap_add':
         # Overlap-and-add: zero-padded prewindow, all-ones postwindow
-        prewindow = zprect(fft_size, int(round(fft_size * (1-overlap))))
+        prewindow = zprect(fft_size, int(round(fft_size * (1-overlap))), taper)
         postwindow = np.ones(ifft_size, dtype=_REAL)
     elif method == 'overlap_save':
         # Overlap-and-save: all-ones prewindow, zero-padded postwindow
-        prewindow = np.ones(fft_size, dtype=_REAL)
+        #prewindow = np.ones(fft_size, dtype=_REAL)
+        prewindow = zprect(fft_size, fft_size-taper, taper)
         postwindow = zprect(ifft_size, int(round(ifft_size * (1-overlap))))
 
     # Make the weights symmetric around zero frequency.
@@ -144,8 +153,8 @@ def test():
 
     freqs = np.linspace(-np.pi, np.pi, 2**11+1)
 
-    for method in ['overlap_add', 'overlap_save']:
-        params = fcfb_design(method=method)
+    def plot_test(method, taper):
+        params = fcfb_design(method=method, taper=taper)
         # Test the filter with different input frequencies.
         # Let's start with a simple test
         # and just plot the total output power.
@@ -153,9 +162,14 @@ def test():
         results = [power_db(fcfb(complex_sine(f, 2**12), 50, **params)[32:]) for f in freqs]
         plt.plot(freqs, results)
 
+    legends = []
+    for method in ['overlap_add', 'overlap_save']:
+        for taper in [0, 8, 32]:
+            plot_test(method, taper)
+            legends.append("%s, taper=%d" % (method, taper))
     plt.xlabel('Input frequency (radian/s)')
     plt.ylabel('Output power (dB)')
-    plt.legend(('Overlap and add', 'Overlap and save'))
+    plt.legend(legends)
     plt.grid()
     plt.show()
 
