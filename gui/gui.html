@@ -1,0 +1,45 @@
+<!DOCTYPE HTML>
+<html>
+	<body>
+		<canvas id="canvas" width="8193" height="500">
+		</canvas>
+		<p>
+		<input type="range" min="0" max="100" step="1" id="slider1" onchange="update_image()">
+		</p>
+		<p>
+		<input type="range" min="0" max="100" step="1" id="slider2" onchange="update_image()">
+		</p>
+		<input type="file" id="fileinput">
+	<script type="text/javascript">
+		const bins = 8193;
+		const reader = new FileReader();
+		const canvas = document.getElementById("canvas");
+		const slider1 = document.getElementById("slider1");
+		const slider2 = document.getElementById("slider2");
+		const ctx = canvas.getContext("2d");
+		const img = ctx.createImageData(bins, 500);
+		var view = null;
+
+		function update_image() {
+			if (view == null) return;
+			const multiplier = slider1.value * 1;
+			const offset = slider2.value * 1;
+			for (let x=0; x<bins*500; x++) {
+				img.data[4*x] = (view[x] - offset) * multiplier;
+				img.data[4*x+3] = 255;
+			}
+			ctx.putImageData(img, 0, 0);
+		}
+		function file_loaded(ev) {
+			const d = ev.target.result;
+			view = new Uint8Array(d);
+		}
+		reader.addEventListener("load", file_loaded);
+		function file_changed(ev) {
+			reader.readAsArrayBuffer(ev.target.files[0]);
+		}
+		document.getElementById("fileinput").
+		addEventListener("change", file_changed);
+	</script>
+	</body>
+</html>
