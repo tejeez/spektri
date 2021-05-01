@@ -1,39 +1,56 @@
 <!DOCTYPE HTML>
 <html>
 	<body>
-		<div style="width: 100%; height: 400px; overflow: scroll;">
+		<div style="width: 100%; height: 500px; overflow: scroll;">
 		<canvas id="canvas" width="8193" height="500">
 		</canvas>
 		</div>
 		<p id="info"></p>
-		<p>
-		<input type="range" min="0" max="100" step="1" id="slider1" onchange="update_image()" style="width: 100%;">
-		</p>
-		<p>
-		<input type="range" min="0" max="100" step="1" id="slider2" onchange="update_image()" style="width: 100%;">
-		</p>
+		<p><input type="range" min="0" max="100" step="1" id="slider1" onchange="update_image()" style="width: 100%;"></p>
+		<p><input type="range" min="0" max="100" step="1" id="slider2" onchange="update_image()" style="width: 100%;"></p>
+		<p><input type="range" min="0" max="60000" step="250" id="slider3" onchange="update_image()" style="width: 100%;"></p>
 		<input type="file" id="fileinput">
 	<script type="text/javascript">
 		const fftsize = 16384;
 		const bins = fftsize / 2 + 1;
-		const fs = 80000000.0;
+		const fs = 100000000.0;
 		const bin_khz = fs / fftsize / 1000;
 		const reader = new FileReader();
 		const canvas = document.getElementById("canvas");
 		const slider1 = document.getElementById("slider1");
 		const slider2 = document.getElementById("slider2");
+		const slider3 = document.getElementById("slider3");
 		const info = document.getElementById("info");
 		const ctx = canvas.getContext("2d");
 		const img = ctx.createImageData(bins, 500);
 		var view = null;
 
+		const colors = [[0,0,0], [0,0,255], [255,128,0], [255,255,255]];
+		const palette = new Uint8Array(4 * 1000 * (colors.length-1));
+		i = 0;
+		for (let c=0; c<colors.length-1; c++) {
+			for(let j=0; j<1000; j++) {
+				const b = j / 1000.0;
+				const a = 1.0 - b;
+				palette[i++] = Math.round(a * colors[c][0] + b * colors[c+1][0]);
+				palette[i++] = Math.round(a * colors[c][1] + b * colors[c+1][1]);
+				palette[i++] = Math.round(a * colors[c][2] + b * colors[c+1][2]);
+				palette[i++] = 255;
+			}
+		}
+
 		function update_image() {
 			if (view == null) return;
 			const multiplier = slider1.value * 1;
 			const offset = slider2.value * 1;
+			const file_offset = Math.round(slider3.value) * bins;
 			for (let x=0; x<bins*500; x++) {
-				img.data[4*x] = (view[x] - offset) * multiplier;
-				img.data[4*x+3] = 255;
+				const v = (view[x + file_offset] - offset) * multiplier;
+				const a = Math.min(Math.max(Math.round(v), 0), palette.length-1);
+				img.data[4*x]   = palette[4*a];
+				img.data[4*x+1] = palette[4*a+1];
+				img.data[4*x+2] = palette[4*a+2];
+				img.data[4*x+3] = palette[4*a+3];
 			}
 			ctx.putImageData(img, 0, 0);
 		}
