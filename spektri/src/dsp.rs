@@ -136,7 +136,7 @@ impl SpectrumAccumulator {
                 *acc_bin += fft_bin.re * fft_bin.re + fft_bin.im * fft_bin.im;
             });
             self.accn += 1;
-            let averages = 100;
+            let averages = 4000;
             if self.accn >= averages {
                 // Write the result in binary format into stdout
 

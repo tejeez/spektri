@@ -2,7 +2,7 @@
 # HF spectrum analyzer for RX888
 
 FFTSIZE=16384
-SAMPLERATE=80000000
+SAMPLERATE=100000000
 
 # libsddc repository should be cloned into ../../libsddc
 # and built into ../../libsddc/build
