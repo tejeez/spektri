@@ -1,23 +1,78 @@
 <!DOCTYPE HTML>
 <html>
+	<head>
+		<title>Spectrogram viewer</title>
+		<meta charset="UTF-8">
+		<style>
+			#canvasdiv {
+				width: 100%;
+				/*height: 500px;*/
+				overflow-x: scroll;
+				padding: 0;
+				border: 0;
+			}
+			canvas {
+				padding: 0;
+				border: 0;
+			}
+			input {
+				width: 100%;
+			}
+			table {
+				width: 100%;
+			}
+			td.a {
+				width: 10em;
+			}
+		</style>
+	</head>
 	<body>
-		<div style="width: 100%; height: 500px; overflow: scroll;">
-		<canvas id="canvas" width="8193" height="500">
-		</canvas>
-		</div>
+		<div id="canvasdiv"><canvas id="canvas"></canvas></div>
 		<p id="info"></p>
-		<p><input type="range" min="0" max="50" step="0.5" value="10" id="slider1" onchange="update_image()" style="width: 100%;"></p>
-		<p><input type="range" min="0" max="200" step="1" value="30" id="slider2" onchange="update_image()" style="width: 100%;"></p>
-		<p><input type="range" min="0" max="60000" step="250" value="0" id="slider3" onchange="update_image()" style="width: 100%;"></p>
-		<input type="file" id="fileinput">
-	<script type="text/javascript">
+		<table>
+		<tr>
+			<td class="a">Palette contrast</td>
+			<td class="b"><input type="range" id="slider1" onchange="update_colors()"
+				min="0" max="50" step="0.5" value="10"></td>
+		</tr>
+		<tr>
+			<td class="a">Palette offset</td>
+			<td class="b"><input type="range" id="slider2" onchange="update_colors()"
+				min="0" max="200" step="1" value="30"></td>
+		</tr>
+		<tr>
+			<td class="a">Time scroll</td>
+			<td class="b"><input type="range" id="slider3" onchange="update_zoom()"
+				min="0" max="60000" step="250" value="0"></td>
+		</tr>
+		<tr>
+			<td class="a">Time zoom (TODO)</td>
+			<td class="b"><input type="range" id="slider4" onchange="update_zoom()"
+				min="-4" max="0" step="1" value="-2"></td>
+		</tr>
+		<tr>
+			<td class="a">Frequency scroll</td>
+			<td class="b"><input type="range" id="slider5" onchange="update_zoom()"
+				min="0" max="60000" step="250" value="0"></td>
+		</tr>
+		<tr>
+			<td class="a">Frequency zoom (TODO)</td>
+			<td class="b"><input type="range" id="slider6" onchange="update_zoom()"
+				min="-4" max="0" step="1" value="-2"></td>
+		</tr>
+		<tr>
+			<td class="a">Data file</td>
+			<td class="b"><input type="file" id="fileinput"></td>
+		</tr>
+		</table>
+	</body>
+	<script type="application/javascript">
 		/*
 		 * Parameters
 		 */
-		const fftsize = 16384;
-		const bins = fftsize / 2 + 1;
-		const fs = 100000000.0;
-		const bin_khz = fs / fftsize / 1000;
+		var bins; // Number of bins
+		var bin_khz; // Spacing of bins in kHz
+		var canvasw, canvash; // Size of the canvas
 
 		/* Various objects */
 		const reader = new FileReader();
@@ -25,50 +80,104 @@
 		const slider1 = document.getElementById("slider1");
 		const slider2 = document.getElementById("slider2");
 		const slider3 = document.getElementById("slider3");
+		const slider4 = document.getElementById("slider4");
+		const slider5 = document.getElementById("slider5");
+		const slider6 = document.getElementById("slider6");
 		const info = document.getElementById("info");
 		const ctx = canvas.getContext("2d");
-		const img = ctx.createImageData(bins, 500);
-		var view = null;
+
+		var img; // ImageData used to draw a line to the canvas
+		var imgdata; // Uint32Array view to img
+		var view = null; // View to the data file
+		/* Intermediate Uint16Array for data after zooming
+		 * but before mapping to a palette */
+		var zoomed;
 
 		/*
-		 * Precalculate color palette
+		 * Precalculate color palette.
+		 *
+		 * View both the image data and the palette as Uint32Arrays
+		 * so that all 4 bytes of a pixel can be copied at once
+		 * and indexing becomes simpler.
 		 */
-		const colors = [[0,0,0], [0,0,255], [255,128,0], [255,255,255]];
-		const gradientlen = 0x100;
-		const palette = new Uint8Array(4 * gradientlen * (colors.length-1));
-		i = 0;
-		for (let c=0; c<colors.length-1; c++) {
-			for(let j=0; j<gradientlen; j++) {
-				const b = j / gradientlen;
-				const a = 1.0 - b;
-				palette[i++] = Math.round(a * colors[c][0] + b * colors[c+1][0]);
-				palette[i++] = Math.round(a * colors[c][1] + b * colors[c+1][1]);
-				palette[i++] = Math.round(a * colors[c][2] + b * colors[c+1][2]);
-				palette[i++] = 255;
+		function generate_palette() {
+			const colors = [[0,0,0], [0,0,255], [255,128,0], [255,255,255]];
+			const gradientlen = 0x100;
+			const palette = new Uint8Array(4 * gradientlen * (colors.length-1));
+			i = 0;
+			for (let c=0; c<colors.length-1; c++) {
+				for(let j=0; j<gradientlen; j++) {
+					const b = j / gradientlen;
+					const a = 1.0 - b;
+					palette[i++] = Math.round(a * colors[c][0] + b * colors[c+1][0]);
+					palette[i++] = Math.round(a * colors[c][1] + b * colors[c+1][1]);
+					palette[i++] = Math.round(a * colors[c][2] + b * colors[c+1][2]);
+					palette[i++] = 255;
+				}
+			}
+			return new Uint32Array(palette.buffer);
+		};
+		const paldata = generate_palette();
+
+
+		function set_canvas_size(w, h) {
+			w = Math.round(w);
+			h = Math.round(h);
+			canvas.width = w;
+			canvas.height = h;
+			canvasw = w;
+			canvash = h;
+			img = ctx.createImageData(w, 1);
+			zoomed = new Uint16Array(w * h);
+			imgdata = new Uint32Array(img.data.buffer);
+		}
+
+		set_canvas_size(1200,500);
+
+		/* Calculate relevant parameters based on FFT size and sample rate */
+		function set_data_parameters(fftsize, fs) {
+			bins = Math.round(fftsize / 2 + 1);
+			bin_khz = fs / fftsize / 1000;
+		}
+
+		set_data_parameters(16384, 100e6);
+
+
+		/* Draw an image to the canvas based on zoomed data
+		 * and color palette settings */
+		function update_colors() {
+			const multiplier = slider1.value * 1;
+			const offset = slider2.value * 1;
+
+			const palmax = paldata.length - 1;
+
+			let zi=0;
+			for (let y=0; y<canvash; y++) {
+				for (let x=0; x<canvasw; x++) {
+					let v = ((zoomed[zi++] - offset) * multiplier);
+					v = Math.min(Math.max(Math.round(v), 0), palmax);
+					imgdata[x] = paldata[v];
+				}
+				ctx.putImageData(img, 0, y);
 			}
 		}
 
-		/* View both the image data and the palette as Uint32Arrays
-		 * so that all 4 bytes of a pixel can be copied at once
-		 * and indexing becomes simpler. */
-		const imgdata = new Uint32Array(img.data.buffer);
-		const paldata = new Uint32Array(palette.buffer);
-
-		function update_image() {
+		function update_zoom() {
 			if (view == null) return;
-			const multiplier = slider1.value * 1;
-			const offset = slider2.value * 1;
-			const file_offset = Math.round(slider3.value) * bins;
+			const fx_offset = Math.round(slider5.value);
+			const fy_offset = Math.round(slider3.value);
 
-			const palmax = palette.length - 1;
-			const n = bins * 500;
-
-			for (let x=0; x<n; x++) {
-				let v = ((view[x + file_offset] - offset) * multiplier);
-				v = Math.min(Math.max(Math.round(v), 0), palmax);
-				imgdata[x] = paldata[v];
+			let zi=0;
+			for (let y=0; y<canvash; y++) {
+				for (let x=0; x<canvasw; x++) {
+					// TODO: zoom
+					let fx = fx_offset + x;
+					let fy = fy_offset + y;
+					zoomed[zi++] = view[bins * fy + fx];
+				}
 			}
-			ctx.putImageData(img, 0, 0);
+
+			update_colors();
 		}
 
 		/*
@@ -77,7 +186,7 @@
 		function file_loaded(ev) {
 			const d = ev.target.result;
 			view = new Uint8Array(d);
-			update_image();
+			update_zoom();
 		}
 		reader.addEventListener("load", file_loaded);
 		function file_changed(ev) {
@@ -87,12 +196,12 @@
 		addEventListener("change", file_changed);
 
 		/*
-		 * Info field
+		 * Info field.
+		 * TODO: handle zoom and scroll correctly
 		 */
 		function update_info(ev) {
 			info.innerText = "" + (bin_khz * ev.offsetX) + "kHz";
 		}
 		canvas.addEventListener("mousemove", update_info);
 	</script>
-	</body>
 </html>
