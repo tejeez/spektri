@@ -38,12 +38,12 @@
 		<tr>
 			<td class="a">Palette contrast</td>
 			<td class="b"><input type="range" id="slider1" onchange="update_colors()"
-				min="0" max="50" step="0.5" value="10"></td>
+				min="0" max="10" step="0.1" value="1"></td>
 		</tr>
 		<tr>
 			<td class="a">Palette offset</td>
 			<td class="b"><input type="range" id="slider2" onchange="update_colors()"
-				min="0" max="250" step="1" value="30"></td>
+				min="0" max="4000" step="10" value="300"></td>
 		</tr>
 		<tr>
 			<td class="a">Time scroll</td>
@@ -80,6 +80,7 @@
 		var canvasw, canvash; // Size of the canvas
 		var pixel0_khz; // First pixel in kHz
 		var pixel_khz; // Spacing of pixels in kHz
+		var databytes = 1; // Bytes per bin in data file
 
 		/* Various objects */
 		const reader = new FileReader();
@@ -202,8 +203,18 @@
 					if (fx1 <= bins && fy1 <= nrecords) {
 						// Find the maximum value under one pixel
 						for (let fy=fy0; fy<fy1; fy++) {
-							for (let fx=fx0; fx<fx1; fx++) {
-								m = Math.max(m, view[bins * fy + fx]);
+							if (databytes == 1) { // 8-bit data
+								let p  = bins * fy + fx0;
+								let p1 = bins * fy + fx1;
+								for (;p < p1;) {
+									m = Math.max(m, view[p++] << 4);
+								}
+							} else { // 16-bit data
+								let p  = (bins * fy + fx0) * 2;
+								let p1 = (bins * fy + fx1) * 2;
+								for (;p < p1; p += 2) {
+									m = Math.max(m, (view[p] << 8) | view[p+1]);
+								}
 							}
 						}
 					}
@@ -217,17 +228,26 @@
 		/*
 		 * Javascript magic to load a file
 		 */
+		var filename;
 		function file_loaded(ev) {
 			const d = ev.target.result;
 			view = new Uint8Array(d);
 
-			nrecords = Math.floor(view.length / bins);
+			/* Parse parameters from filename */
+			s = filename.split(".")[0].split("_");
+			if (s.length >= 5) {
+				databytes = (s.length >= 6 && s[5] == "16") ? 2 : 1;
+				set_data_parameters(s[4] * 1, s[3] * 1);
+			}
+
+			nrecords = Math.floor(view.length / (bins * databytes));
 			update_slider_bounds();
 
 			update_zoom();
 		}
 		reader.addEventListener("load", file_loaded);
 		function file_changed(ev) {
+			filename = ev.target.files[0].name;
 			reader.readAsArrayBuffer(ev.target.files[0]);
 		}
 		document.getElementById("fileinput").

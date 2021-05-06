@@ -136,20 +136,24 @@ impl SpectrumAccumulator {
                 *acc_bin += fft_bin.re * fft_bin.re + fft_bin.im * fft_bin.im;
             });
             self.accn += 1;
-            let averages = 4000;
+            let averages = 2000;
             if self.accn >= averages {
                 // Write the result in binary format into stdout
 
-                let mut printbuf: Vec<u8> = vec![0; self.acc.len()];
+                let mut printbuf: Vec<u8> = vec![0; self.acc.len()*2];
 
                 // divide accumulator bins by self.accn,
                 // but do it as an addition after conversion to dB scale
                 let db_plus = (self.accn as f32).log10() * -10.0;
 
-                for (acc_bin, out) in self.acc.iter().zip(printbuf.iter_mut()) {
+                for (acc_bin, out) in self.acc.iter().zip(printbuf.chunks_mut(2)) {
                     let db = acc_bin.log10() * 10.0 + db_plus;
                     // quantize to 0.5 dB per LSB, full scale at 250
-                    *out = (db * 2.0 + 250.0).max(0.0).min(255.0) as u8;
+                    //*out = (db * 2.0 + 250.0).max(0.0).min(255.0) as u8;
+                    // quantize to 0.05 dB per LSB, full scale at 4000, clamp to 12 bits
+                    let o = (db * 20.0 + 4000.0).max(0.0).min(4095.0) as u16;
+                    out[0] = (o >> 8) as u8;
+                    out[1] = (o & 0xFF) as u8;
                 }
                 std::io::stdout().write_all(&printbuf)?;
 
