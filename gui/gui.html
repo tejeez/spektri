@@ -1,19 +1,21 @@
 <!DOCTYPE HTML>
-<html>
+<html lang="en">
 	<head>
 		<title>Spectrogram viewer</title>
 		<meta charset="UTF-8">
 		<style>
+			body {
+				margin: 0;
+				padding: 2px;
+			}
 			#canvasdiv {
 				width: 100%;
-				/*height: 500px;*/
 				overflow-x: scroll;
 				padding: 0;
-				border: 0;
 			}
 			canvas {
+				margin: 0;
 				padding: 0;
-				border: 0;
 			}
 			input {
 				width: 100%;
@@ -28,8 +30,11 @@
 	</head>
 	<body>
 		<div id="canvasdiv"><canvas id="canvas"></canvas></div>
-		<p id="info"></p>
 		<table>
+		<tr>
+			<td class="a">Cursor</td>
+			<td class="b" id="info">-</td>
+		</tr>
 		<tr>
 			<td class="a">Palette contrast</td>
 			<td class="b"><input type="range" id="slider1" onchange="update_colors()"
@@ -65,7 +70,6 @@
 			<td class="b"><input type="file" id="fileinput"></td>
 		</tr>
 		</table>
-	</body>
 	<script type="application/javascript">
 		/*
 		 * Parameters
@@ -135,7 +139,7 @@
 			imgdata = new Uint32Array(img.data.buffer);
 		}
 
-		set_canvas_size(1200,500);
+		set_canvas_size(1350, 500);
 
 		/* Calculate relevant parameters based on FFT size and sample rate */
 		function set_data_parameters(fftsize, fs) {
@@ -231,7 +235,6 @@
 
 		/*
 		 * Info field.
-		 * TODO: handle zoom and scroll correctly
 		 */
 		function update_info(ev) {
 			info.innerText = "" + (pixel0_khz + pixel_khz * ev.offsetX).toFixed(1) + " kHz";
@@ -240,4 +243,5 @@
 
 		update_zoom();
 	</script>
+	</body>
 </html>
