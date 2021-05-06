@@ -38,27 +38,27 @@
 		<tr>
 			<td class="a">Palette offset</td>
 			<td class="b"><input type="range" id="slider2" onchange="update_colors()"
-				min="0" max="200" step="1" value="30"></td>
+				min="0" max="250" step="1" value="30"></td>
 		</tr>
 		<tr>
 			<td class="a">Time scroll</td>
 			<td class="b"><input type="range" id="slider3" onchange="update_zoom()"
-				min="0" max="60000" step="250" value="0"></td>
+				min="0" max="1000" step="250" value="0"></td>
 		</tr>
 		<tr>
-			<td class="a">Time zoom (TODO)</td>
+			<td class="a">Time zoom</td>
 			<td class="b"><input type="range" id="slider4" onchange="update_zoom()"
-				min="-4" max="0" step="1" value="-2"></td>
+				min="-8" max="1" step="1" value="-2"></td>
 		</tr>
 		<tr>
 			<td class="a">Frequency scroll</td>
 			<td class="b"><input type="range" id="slider5" onchange="update_zoom()"
-				min="0" max="60000" step="250" value="0"></td>
+				min="0" max="1000" step="250" value="0"></td>
 		</tr>
 		<tr>
-			<td class="a">Frequency zoom (TODO)</td>
+			<td class="a">Frequency zoom</td>
 			<td class="b"><input type="range" id="slider6" onchange="update_zoom()"
-				min="-4" max="0" step="1" value="-2"></td>
+				min="-4" max="1" step="1" value="-2"></td>
 		</tr>
 		<tr>
 			<td class="a">Data file</td>
@@ -71,8 +71,11 @@
 		 * Parameters
 		 */
 		var bins; // Number of bins
+		var nrecords = 0; // Number of records in loaded file
 		var bin_khz; // Spacing of bins in kHz
 		var canvasw, canvash; // Size of the canvas
+		var pixel0_khz; // First pixel in kHz
+		var pixel_khz; // Spacing of pixels in kHz
 
 		/* Various objects */
 		const reader = new FileReader();
@@ -140,7 +143,15 @@
 			bin_khz = fs / fftsize / 1000;
 		}
 
+		function update_slider_bounds() {
+			slider5.value = 0;
+			slider5.max = bins;
+			slider3.value = 0;
+			slider3.max = nrecords;
+		}
+
 		set_data_parameters(16384, 100e6);
+		update_slider_bounds();
 
 
 		/* Draw an image to the canvas based on zoomed data
@@ -163,17 +174,36 @@
 		}
 
 		function update_zoom() {
-			if (view == null) return;
 			const fx_offset = Math.round(slider5.value);
 			const fy_offset = Math.round(slider3.value);
+			pixel0_khz = bin_khz * fx_offset;
+
+			const zoomx = Math.pow(0.5, slider6.value);
+			const zoomy = Math.pow(0.5, slider4.value);
+			const zoomxi = Math.max(1, Math.round(zoomx));
+			const zoomyi = Math.max(1, Math.round(zoomy));
+			pixel_khz = bin_khz * zoomx;
+
+			if (view == null) return;
 
 			let zi=0;
 			for (let y=0; y<canvash; y++) {
 				for (let x=0; x<canvasw; x++) {
-					// TODO: zoom
-					let fx = fx_offset + x;
-					let fy = fy_offset + y;
-					zoomed[zi++] = view[bins * fy + fx];
+					// Bounds of the rectangle of bins under one pixel
+					let fx0 = fx_offset + Math.floor(x * zoomx);
+					let fy0 = fy_offset + Math.floor(y * zoomy);
+					let fx1 = fx0 + zoomxi;
+					let fy1 = fy0 + zoomyi;
+					let m = 0;
+					if (fx1 <= bins && fy1 <= nrecords) {
+						// Find the maximum value under one pixel
+						for (let fy=fy0; fy<fy1; fy++) {
+							for (let fx=fx0; fx<fx1; fx++) {
+								m = Math.max(m, view[bins * fy + fx]);
+							}
+						}
+					}
+					zoomed[zi++] = m;
 				}
 			}
 
@@ -186,6 +216,10 @@
 		function file_loaded(ev) {
 			const d = ev.target.result;
 			view = new Uint8Array(d);
+
+			nrecords = Math.floor(view.length / bins);
+			update_slider_bounds();
+
 			update_zoom();
 		}
 		reader.addEventListener("load", file_loaded);
@@ -200,8 +234,10 @@
 		 * TODO: handle zoom and scroll correctly
 		 */
 		function update_info(ev) {
-			info.innerText = "" + (bin_khz * ev.offsetX) + "kHz";
+			info.innerText = "" + (pixel0_khz + pixel_khz * ev.offsetX).toFixed(1) + " kHz";
 		}
 		canvas.addEventListener("mousemove", update_info);
+
+		update_zoom();
 	</script>
 </html>
