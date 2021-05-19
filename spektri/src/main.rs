@@ -47,6 +47,8 @@ fn main() -> std::io::Result<()> {
         fft_size: args[2].parse().unwrap(),
         scaling: 1.0 / std::i16::MAX as f32,
         ffts_per_buf: 8,
+        spectrum_format: dsp::SpectrumFormat::U8,
+        spectrum_averages: 2000,
     });
 
     // buffer for raw input data

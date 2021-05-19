@@ -1,8 +1,11 @@
 use rustfft::num_complex::Complex;
 use std::f32::consts::PI;
 use std::io::Write;
-use rayon::prelude::*;
+//use rayon::prelude::*;
 use crate::multifft::MultiFft;
+
+#[derive(Copy, Clone)]
+pub enum SpectrumFormat { U8, U16 }
 
 // Parameters for signal processing
 pub struct DspParams {
@@ -11,6 +14,8 @@ pub struct DspParams {
     pub scaling: f32, // Scaling of input values
     pub ffts_per_buf: usize,
     //pub fft_overlap: usize, // Fixed for now
+    pub spectrum_format: SpectrumFormat, // Output format for spectrum data
+    pub spectrum_averages: u32, // Number of FFTs averaged
 }
 
 // requirements for the buffers given to DspState::process
@@ -57,7 +62,7 @@ impl DspState {
             fft_interval: fft_interval,
 
             mfft: MultiFft::init(params.fft_size),
-            accu: SpectrumAccumulator::init(result_bins),
+            accu: SpectrumAccumulator::init(result_bins, params.spectrum_averages, params.spectrum_format),
 
             window: hann_window(params.fft_size, params.scaling),
             fft_result_buf: vec![Complex{re:0.0, im:0.0}; result_bins * params.ffts_per_buf],
@@ -107,20 +112,24 @@ impl DspState {
 
 
 
-
-
 struct SpectrumAccumulator {
     acc: Vec<f32>, // Accumulator for FFT averaging
     accn: u32, // Counter for number of FFTs averaged
+    averages: u32, // parameter
+    outfmt: SpectrumFormat, // parameter
 }
 
 impl SpectrumAccumulator {
     fn init(
         n: usize, // Number of bins
+        averages: u32, // Number of FFTs averaged
+        outfmt: SpectrumFormat, // Output format for spectrum data
     ) -> SpectrumAccumulator {
         SpectrumAccumulator {
             acc: vec![0.0; n],
             accn: 0,
+            averages: averages,
+            outfmt: outfmt,
         }
     }
 
@@ -130,31 +139,44 @@ impl SpectrumAccumulator {
         ) -> std::io::Result<()>
     {
         for fft_result in fft_results.iter() {
-            self.acc.par_iter_mut().zip(fft_result.par_iter()).for_each(
+            // rayon seems to slow it down here. Maybe parallelization could be made optional.
+            //self.acc.par_iter_mut().zip(fft_result.par_iter()).for_each(
+            self.acc.iter_mut().zip(fft_result.iter()).for_each(
                 |(acc_bin, fft_bin)|
             {
                 *acc_bin += fft_bin.re * fft_bin.re + fft_bin.im * fft_bin.im;
             });
             self.accn += 1;
-            let averages = 2000;
+            let averages = self.averages;
             if self.accn >= averages {
                 // Write the result in binary format into stdout
 
-                let mut printbuf: Vec<u8> = vec![0; self.acc.len()*2];
+                let outfmt = self.outfmt;
+                let mut printbuf: Vec<u8> = vec![
+                    0;
+                    self.acc.len() * match outfmt { SpectrumFormat::U16=>2, SpectrumFormat::U8=>1 }];
 
                 // divide accumulator bins by self.accn,
                 // but do it as an addition after conversion to dB scale
                 let db_plus = (self.accn as f32).log10() * -10.0;
 
-                for (acc_bin, out) in self.acc.iter().zip(printbuf.chunks_mut(2)) {
-                    let db = acc_bin.log10() * 10.0 + db_plus;
-                    // quantize to 0.5 dB per LSB, full scale at 250
-                    //*out = (db * 2.0 + 250.0).max(0.0).min(255.0) as u8;
-                    // quantize to 0.05 dB per LSB, full scale at 4000, clamp to 12 bits
-                    let o = (db * 20.0 + 4000.0).max(0.0).min(4095.0) as u16;
-                    out[0] = (o >> 8) as u8;
-                    out[1] = (o & 0xFF) as u8;
-                }
+                match outfmt {
+                SpectrumFormat::U16 => {
+                    for (acc_bin, out) in self.acc.iter().zip(printbuf.chunks_mut(2)) {
+                        let db = acc_bin.log10() * 10.0 + db_plus;
+                        // quantize to 0.05 dB per LSB, full scale at 4000, clamp to 12 bits
+                        let o = (db * 20.0 + 4000.0).max(0.0).min(4095.0) as u16;
+                        out[0] = (o >> 8) as u8;
+                        out[1] = (o & 0xFF) as u8;
+                    }
+                },
+                SpectrumFormat::U8 => {
+                    for (acc_bin, out) in self.acc.iter().zip(printbuf.iter_mut()) {
+                        let db = acc_bin.log10() * 10.0 + db_plus;
+                        // quantize to 0.5 dB per LSB, full scale at 250
+                        *out = (db * 2.0 + 250.0).max(0.0).min(255.0) as u8;
+                    }
+                }}
                 std::io::stdout().write_all(&printbuf)?;
 
                 // Reset accumulator
