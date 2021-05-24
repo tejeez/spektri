@@ -3,6 +3,10 @@ use std::io::Read;
 use byte::*;
 use rustfft::num_complex::Complex;
 //use rayon::prelude::*;
+
+#[macro_use]
+extern crate clap;
+
 mod dsp;
 mod multifft;
 
@@ -33,30 +37,49 @@ fn cs16_le_to_cf32(src: &[u8], dst: &mut [Complex<f32>]) {
     });
 }*/
 
-fn main() -> std::io::Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() < 3 {
-        eprintln!("Arguments: (real|complex) FFT_SIZE");
-        return Ok(())
+arg_enum! {
+    #[derive(Debug)]
+    enum InputFormat {
+        S16le,   // real signed 16-bit, little endian
+        Cs16le,  // complex signed 16-bit, little endian
     }
+}
 
-    let is_complex: bool = args[1] == "complex";
+fn parse_configuration() -> (dsp::DspParams, InputFormat) {
+    use clap::{Arg, App/*, SubCommand*/};
+    let matches = App::new("spektri")
+        .args_from_usage("
+            -s, --fftsize=[SIZE]             'FFT size'
+            -a, --averages=[NUMBER]          'Number of FFTs averaged for spectrum'
+            -f, --inputformat=[FORMAT]       'Input signal format'
+            -F, --spectrumformat=[FORMAT]    'Spectrum output format'
+            ")
+        .get_matches();
 
-    let (mut dsp, bufsize) = dsp::DspState::init(dsp::DspParams {
-        complex: is_complex,
-        fft_size: args[2].parse().unwrap(),
+    let inputformat = value_t!(matches, "inputformat", InputFormat).unwrap_or_else(|e| e.exit());
+    (dsp::DspParams {
+        complex: match inputformat { InputFormat::Cs16le => true, _ => false },
+        fft_size: value_t!(matches, "fftsize", usize).unwrap_or(16384),
         scaling: 1.0 / std::i16::MAX as f32,
         ffts_per_buf: 8,
-        spectrum_format: dsp::SpectrumFormat::U8,
-        spectrum_averages: 2000,
-    });
+        spectrum_format: if matches.value_of("spectrumformat").unwrap_or("u8") == "u16" { dsp::SpectrumFormat::U16 } else { dsp::SpectrumFormat::U8 },
+        spectrum_averages: value_t!(matches, "averages", u32).unwrap_or(2000),
+    }, inputformat)
+}
 
-    // buffer for raw input data
-    let mut rawbuf: Vec<u8> = vec![0; {if is_complex {4} else {2}} * bufsize.new];
+
+fn main() -> std::io::Result<()> {
+    let (dspparams, inputformat) = parse_configuration();
+
+    let (mut dsp, bufsize) = dsp::DspState::init(dspparams);
 
     let mut input = std::io::stdin();
 
-    if is_complex {
+    match inputformat {
+    InputFormat::Cs16le => {
+        // buffer for raw input data
+        let mut rawbuf: Vec<u8> = vec![0; 4 * bufsize.new];
+
         // buffer for type converted data with overlap
         let mut buf: Vec<Complex<f32>> = vec![Complex{re:0.0,im:0.0}; bufsize.total ];
 
@@ -73,7 +96,11 @@ fn main() -> std::io::Result<()> {
 
             dsp.process_complex(&buf)?;
         }
-    } else {
+    }
+    _ => {
+        // buffer for raw input data
+        let mut rawbuf: Vec<u8> = vec![0; 2 * bufsize.new];
+
         // buffer for type converted data with overlap
         let mut buf: Vec<f32> = vec![0.0; bufsize.total ];
 
@@ -90,6 +117,7 @@ fn main() -> std::io::Result<()> {
 
             dsp.process_real(&buf)?;
         }
+    }
     }
     Ok(())
 }

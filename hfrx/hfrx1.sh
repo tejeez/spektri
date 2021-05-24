@@ -28,6 +28,8 @@ TASKSET2=
  ${TASKSET2} "${LIBSDDC}/build/src/sddc_stream" "${LIBSDDC}/firmware/SDDC_FX3.img" "${SAMPLERATE}"
 done) \
 | ${TASKSET2} pv \
-| ${TASKSET} ../spektri/target/release/spektri real "${FFTSIZE}" \
-| bzip2 \
-> "${DATA}/hf_$(date +%Y%m%d_%H%M%S)_${SAMPLERATE}_${FFTSIZE}_16.data.bz2"
+| ${TASKSET} ../spektri/target/release/spektri \
+"--inputformat=s16le" \
+"--fftsize=${FFTSIZE}" \
+"--spectrumformat=u16" \
+> "${DATA}/hf_$(date +%Y%m%d_%H%M%S)_${SAMPLERATE}_${FFTSIZE}_16.data"
