@@ -37,7 +37,7 @@ fn parse_configuration() -> (dsp::DspParams, InputFormat) {
             value_t!(matches, "fftbuf", usize)
             .unwrap_or(8),
         spectrum_format:
-            value_t!(matches, "inputformat", dsp::SpectrumFormat)
+            value_t!(matches, "spectrumformat", dsp::SpectrumFormat)
             .unwrap_or(dsp::SpectrumFormat::U8),
         spectrum_averages:
             value_t!(matches, "averages", u32)
