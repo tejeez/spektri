@@ -8,6 +8,8 @@ mod spectrum;
 use spectrum::SpectrumAccumulator;
 pub use spectrum::SpectrumFormat;
 
+pub mod fftutil;
+
 
 // Parameters for signal processing
 pub struct DspParams {
@@ -52,6 +54,11 @@ fn hann_window(size: usize, scaling: f32) -> Vec<f32> {
     w
 }
 
+fn rectangular_window(size: usize, scaling: f32) -> Vec<f32> {
+    let s = scaling / (size as f32);
+    (0..size).map(|_i| s).collect()
+}
+
 impl DspState {
     pub fn init(params: DspParams) -> (DspState, InputBufferSize) {
         let fft_overlap = params.fft_size / 4; // 25% overlap
@@ -64,9 +71,12 @@ impl DspState {
             fft_interval: fft_interval,
 
             mfft: MultiFft::init(params.fft_size),
-            accu: SpectrumAccumulator::init(result_bins, params.spectrum_averages, params.spectrum_format),
+            accu: SpectrumAccumulator::init(result_bins, params.spectrum_averages, params.spectrum_format, params.complex),
 
-            window: hann_window(params.fft_size, params.scaling),
+            // TODO: Now that a rectangular window is used,
+            // consider removing the multiplication with a window function
+            // and just replacing it with a constant scaling.
+            window: rectangular_window(params.fft_size, params.scaling),
             fft_result_buf: vec![Complex{re:0.0, im:0.0}; result_bins * params.ffts_per_buf],
         }, InputBufferSize {
             overlap: fft_overlap,
