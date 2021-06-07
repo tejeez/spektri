@@ -71,7 +71,7 @@ impl DspState {
             fft_interval: fft_interval,
 
             mfft: MultiFft::init(params.fft_size),
-            accu: SpectrumAccumulator::init(result_bins, params.spectrum_averages, params.spectrum_format, params.complex),
+            accu: SpectrumAccumulator::init(params.fft_size, params.complex, params.spectrum_averages, params.spectrum_format),
 
             // TODO: Now that a rectangular window is used,
             // consider removing the multiplication with a window function

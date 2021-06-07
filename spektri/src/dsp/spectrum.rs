@@ -33,24 +33,24 @@ arg_enum! { // needed for command line parsing
 pub struct SpectrumAccumulator {
     acc: Vec<f32>, // Accumulator for FFT averaging
     accn: u32, // Counter for number of FFTs averaged
+    fft_size: usize, // parameter
     averages: u32, // parameter
     outfmt: SpectrumFormat, // parameter
-    complex: bool, // parameter
 }
 
 impl SpectrumAccumulator {
     pub fn init(
-        n: usize, // Number of bins
+        fft_size: usize,
+        complex: bool, // is the input to FFT complex
         averages: u32, // Number of FFTs averaged
         outfmt: SpectrumFormat, // Output format for spectrum data
-        complex: bool, // is the input to FFT complex
     ) -> SpectrumAccumulator {
         SpectrumAccumulator {
-            acc: vec![0.0; n],
+            acc: vec![0.0; if complex { fft_size } else { fft_size/2+1 }],
             accn: 0,
+            fft_size: fft_size,
             averages: averages,
             outfmt: outfmt,
-            complex: complex,
         }
     }
 
@@ -60,14 +60,8 @@ impl SpectrumAccumulator {
         ) -> std::io::Result<()>
     {
         for fft_result in fft_results.iter() {
-            let is_complex = self.complex;
-            // TODO: it might be cleaner to give FFT size as a parameter to init
-            let fft_size = if is_complex {
-                fft_result.len()
-            } else {
-                (fft_result.len() - 1)*2 // not sure if it works for odd FFT sizes
-            };
-            let getbin = |i: isize| get_bin(fft_result, fft_size, is_complex, i);
+            let fft_size = self.fft_size;
+            let getbin = |i: isize| get_bin(fft_result, fft_size, i);
 
             // rayon seems to slow it down here. Maybe parallelization could be made optional.
             // For now, rayon is not used.
