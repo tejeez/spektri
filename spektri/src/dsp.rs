@@ -8,6 +8,9 @@ mod spectrum;
 use spectrum::SpectrumAccumulator;
 pub use spectrum::SpectrumFormat;
 
+mod fcfb;
+use fcfb::Fcfb;
+
 pub mod fftutil;
 
 
@@ -36,6 +39,7 @@ pub struct DspState {
 
     mfft: MultiFft,
     accu: SpectrumAccumulator,
+    fb: Fcfb,
 
     window: Vec<f32>, // Window function,
     fft_result_buf: Vec<Complex<f32>>, // Pre-allocated buffer
@@ -72,6 +76,7 @@ impl DspState {
 
             mfft: MultiFft::init(params.fft_size),
             accu: SpectrumAccumulator::init(params.fft_size, params.complex, params.spectrum_averages, params.spectrum_format),
+            fb: Fcfb::init(params.fft_size), // fixed parameters for first tests
 
             // TODO: Now that a rectangular window is used,
             // consider removing the multiplication with a window function
@@ -100,6 +105,7 @@ impl DspState {
             &mut resultbufs
         );
         self.accu.accumulate(&resultbufs)?;
+        self.fb.process(&resultbufs);
         Ok(())
     }
 
@@ -118,6 +124,7 @@ impl DspState {
             &mut resultbufs
         );
         self.accu.accumulate(&resultbufs)?;
+        self.fb.process(&resultbufs);
         Ok(())
     }
 }

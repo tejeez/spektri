@@ -1,10 +1,9 @@
 This is my attempt to implement an FFT-based spectrum analyzer program
 that can make use of parallel computation on multi-core CPUs.
 
-The same FFT results will be also used for digital down-conversion,
-in a way similar to how, for example,
-[linrad](http://www.sm5bsz.com/linuxdsp/qex/030506qex036.pdf)
-does it.
+The same FFT results will be also used for digital down-conversion
+of multiple narrow-band channels using a
+[fast-convolution filter bank](https://ieeexplore.ieee.org/document/6834830).
 
 It's related to my master's thesis on implementing a direct sampling
 0-30 MHz receiver within a limited power budget.
