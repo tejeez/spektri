@@ -1,5 +1,7 @@
 /* Fast-convolution filter bank */
 
+use std::fs::File;
+use std::io::prelude::*;
 use rustfft::{FftPlanner, num_complex::Complex};
 use super::fftutil::*;
 
@@ -33,6 +35,7 @@ impl Fcfb {
 pub struct FcFilter {
     fft_size: usize,
     ifft: std::sync::Arc<dyn rustfft::Fft<f32>>, // RustFFT plan
+    output_file: File,
 }
 
 impl FcFilter {
@@ -44,7 +47,10 @@ impl FcFilter {
         let mut planner = FftPlanner::new();
         Self {
             fft_size: fft_size,
-            ifft: planner.plan_fft_inverse(ifft_size)
+            ifft: planner.plan_fft_inverse(ifft_size),
+            // Proper error handling is missing here, but the file output
+            // implemented for now is intended only for initial testing anyway
+            output_file: File::create("data/filtered").unwrap(),
         }
     }
 
@@ -69,6 +75,19 @@ impl FcFilter {
 
         self.ifft.process(&mut buf);
 
-        // TODO
+        // fixed 25% overlap
+        write_to_file(&mut self.output_file, &buf[ifft_size / 8 .. ifft_size / 8 * 7]);
     }
+}
+
+
+fn write_to_file(f: &mut File, data: &[Complex<f32>]) {
+    use byte::*;
+    let mut outbuf: Vec<u8> = vec![0; data.len() * 8];
+    let mut o = 0;
+    for v in data.into_iter() {
+        outbuf.write_with(&mut o, v.re, LE);
+        outbuf.write_with(&mut o, v.im, LE);
+    }
+    f.write_all(&outbuf).unwrap();
 }
