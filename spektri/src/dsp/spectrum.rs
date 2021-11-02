@@ -60,22 +60,30 @@ impl SpectrumAccumulator {
         ) -> std::io::Result<()>
     {
         for fft_result in fft_results.iter() {
+            // Perform convolution in frequency domain with -0.5, 1, -0.5,
+            // equivalent to applying a Hann window before the FFT.
+            // As an optimization, call getbin only for the first and last bins
+            // where modulo indexing needs to be handled in a special way.
+
+            // Special cases of first and last bins
             let fft_size = self.fft_size;
             let getbin = |i: isize| get_bin(fft_result, fft_size, i);
-
-            // rayon seems to slow it down here. Maybe parallelization could be made optional.
-            // For now, rayon is not used.
-            self.acc.iter_mut().enumerate().for_each(
-                |(i, acc_bin)|
-            {
-                /* Perform convolution in frequency domain with -0.5, 1, -0.5,
-                 * equivalent to applying a Hann window before the FFT */
+            for &i in [ 0, self.acc.len()-1 ].iter() {
                 let c = getbin(i as isize)
                       -(getbin(i as isize - 1) +
                         getbin(i as isize + 1)) * 0.5;
+                self.acc[i] += c.re * c.re + c.im * c.im;
+            }
 
+            // Faster way to process the rest of the bins
+            self.acc[1..].iter_mut().zip(fft_result.windows(3)).for_each(
+                |(acc_bin, w)|
+            {
+                let c = w[1] - (w[0] + w[2]) * 0.5;
                 *acc_bin += c.re * c.re + c.im * c.im;
             });
+
+            // Count the number of FFTs accumulated
             self.accn += 1;
             let averages = self.averages;
             if self.accn >= averages {
