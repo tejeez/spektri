@@ -28,18 +28,19 @@ impl Fcfb {
     ) -> Self
     {
         let mut s = Self::init(fft_size);
-        s.add_filter(100, "data/filtered1");
-        s.add_filter(200, "data/filtered2");
+        s.add_filter(32, 100, "data/filtered1");
+        s.add_filter(8, 200, "data/filtered2");
         s
     }
 
     pub fn add_filter(
         &mut self,
+        ifft_size: usize,
         freq: isize,
         filename: &str,
     )
     {
-        self.filters.push(FcFilter::init(self.fft_size, 32, freq, filename));
+        self.filters.push(FcFilter::init(self.fft_size, ifft_size, freq, filename));
     }
 
     pub fn process(
@@ -60,6 +61,7 @@ impl Fcfb {
 pub struct FcFilter {
     fft_size: usize,
     freq: isize,
+    weights: Vec<f32>, // Frequency response
     ifft: std::sync::Arc<dyn rustfft::Fft<f32>>, // RustFFT plan
     output_file: File,
 }
@@ -77,6 +79,7 @@ impl FcFilter {
         Self {
             fft_size: fft_size,
             freq: freq,
+            weights: raised_cosine_weights(ifft_size),
             ifft: planner.plan_fft_inverse(ifft_size),
             // Proper error handling is missing here, but the file output
             // implemented for now is intended only for initial testing anyway
@@ -99,7 +102,7 @@ impl FcFilter {
         (0..ifft_size).map(|i|
             (i + ifft_shift) % ifft_size
         ).map(|i|
-            // TODO: filter coefficients
+            self.weights[i] *
             get_bin(fft_result, fft_size, freq + (i as isize))
         ).collect();
 
@@ -120,4 +123,13 @@ fn write_to_file(f: &mut File, data: &[Complex<f32>]) {
         outbuf.write_with(&mut o, v.im, LE);
     }
     f.write_all(&outbuf).unwrap();
+}
+
+fn raised_cosine_weights(size: usize) -> Vec<f32> {
+    use std::f32::consts::PI;
+    let f = (2.0 * PI) / size as f32;
+    let mut w: Vec<f32> = (0..size).map(|i| {
+        0.5 - 0.5 * ((i as f32) * f).cos()
+    }).collect();
+    w
 }
