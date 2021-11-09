@@ -2,12 +2,14 @@
 
 use std::fs::File;
 use std::io::prelude::*;
+use rayon::prelude::*;
 use rustfft::{FftPlanner, num_complex::Complex};
 use super::fftutil::*;
 
 /* Bank of filters */
 pub struct Fcfb {
-    f: FcFilter, // TODO: some data structure to hold multiple filters
+    fft_size: usize,
+    filters: Vec<FcFilter>,
 }
 
 impl Fcfb {
@@ -15,8 +17,29 @@ impl Fcfb {
         fft_size: usize,
     ) -> Self {
         Self {
-            f: FcFilter::init(fft_size, 32),
+            fft_size: fft_size,
+            filters: Vec::new(),
         }
+    }
+
+    // temporary init function for initial testing
+    pub fn init_test(
+        fft_size: usize,
+    ) -> Self
+    {
+        let mut s = Self::init(fft_size);
+        s.add_filter(100, "data/filtered1");
+        s.add_filter(200, "data/filtered2");
+        s
+    }
+
+    pub fn add_filter(
+        &mut self,
+        freq: isize,
+        filename: &str,
+    )
+    {
+        self.filters.push(FcFilter::init(self.fft_size, 32, freq, filename));
     }
 
     pub fn process(
@@ -24,9 +47,11 @@ impl Fcfb {
         fft_results: &[&mut[Complex<f32>]],
     )
     {
-        for fft_result in fft_results.iter() {
-            self.f.process(fft_result);
-        }
+        self.filters.par_iter_mut().for_each( |filter| {
+            for fft_result in fft_results.iter() {
+                filter.process(fft_result);
+            }
+        });
     }
 }
 
@@ -34,6 +59,7 @@ impl Fcfb {
 /* One filter */
 pub struct FcFilter {
     fft_size: usize,
+    freq: isize,
     ifft: std::sync::Arc<dyn rustfft::Fft<f32>>, // RustFFT plan
     output_file: File,
 }
@@ -42,15 +68,19 @@ impl FcFilter {
     pub fn init(
         fft_size: usize,
         ifft_size: usize,
-    ) -> Self {
+        freq: isize, // Center frequency
+        filename: &str,
+    ) -> Self
+    {
         // TODO: reuse the planner
         let mut planner = FftPlanner::new();
         Self {
             fft_size: fft_size,
+            freq: freq,
             ifft: planner.plan_fft_inverse(ifft_size),
             // Proper error handling is missing here, but the file output
             // implemented for now is intended only for initial testing anyway
-            output_file: File::create("data/filtered").unwrap(),
+            output_file: File::create(filename).unwrap(),
         }
     }
 
@@ -61,7 +91,7 @@ impl FcFilter {
     {
         let fft_size = self.fft_size;
         let ifft_size = self.ifft.len();
-        let freq: isize = 100;
+        let freq = self.freq;
 
         let ifft_shift = ifft_size / 2;
 

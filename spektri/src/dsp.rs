@@ -76,7 +76,7 @@ impl DspState {
 
             mfft: MultiFft::init(params.fft_size),
             accu: SpectrumAccumulator::init(params.fft_size, params.complex, params.spectrum_averages, params.spectrum_format),
-            fb: Fcfb::init(params.fft_size), // fixed parameters for first tests
+            fb: Fcfb::init_test(params.fft_size), // fixed parameters for first tests
 
             // TODO: Now that a rectangular window is used,
             // consider removing the multiplication with a window function
