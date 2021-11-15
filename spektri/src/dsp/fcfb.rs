@@ -1,6 +1,7 @@
 /* Fast-convolution filter bank */
 
 use std::fs::File;
+use std::error::Error;
 use std::io::prelude::*;
 use rayon::prelude::*;
 use rustfft::{FftPlanner, num_complex::Complex};
@@ -40,7 +41,10 @@ impl Fcfb {
         filename: &str,
     )
     {
-        self.filters.push(FcFilter::init(self.fft_size, ifft_size, freq, filename));
+        match FcFilter::init(self.fft_size, ifft_size, freq, filename) {
+            Ok(filter) => self.filters.push(filter),
+            Err(error) => println!("Error creating filter: {:?}", error),
+        }
     }
 
     pub fn process(
@@ -50,15 +54,26 @@ impl Fcfb {
     {
         self.filters.par_iter_mut().for_each( |filter| {
             for fft_result in fft_results.iter() {
-                filter.process(fft_result);
+                if filter.done { break; }
+                match filter.process(fft_result) {
+                    Err(error) => {
+                        println!("Error running filter: {:?}", error);
+                        // Mark failed filter as done, so it gets removed
+                        filter.done = true;
+                    },
+                    Ok(_) => {}
+                }
             }
         });
+        // Remove filters that are done
+        self.filters.retain(|f| !f.done);
     }
 }
 
 
 /* One filter */
 pub struct FcFilter {
+    done: bool,
     fft_size: usize,
     freq: isize,
     weights: Vec<f32>, // Frequency response
@@ -72,25 +87,24 @@ impl FcFilter {
         ifft_size: usize,
         freq: isize, // Center frequency
         filename: &str,
-    ) -> Self
+    ) -> Result<Self, Box<dyn Error>>
     {
         // TODO: reuse the planner
         let mut planner = FftPlanner::new();
-        Self {
+        Ok(Self {
+            done: false,
             fft_size: fft_size,
             freq: freq,
             weights: raised_cosine_weights(ifft_size),
             ifft: planner.plan_fft_inverse(ifft_size),
-            // Proper error handling is missing here, but the file output
-            // implemented for now is intended only for initial testing anyway
-            output_file: File::create(filename).unwrap(),
-        }
+            output_file: File::create(filename)?,
+        })
     }
 
     pub fn process(
         &mut self,
         fft_result: &[Complex<f32>],
-    )
+    ) -> Result<(), Box<dyn Error>>
     {
         let fft_size = self.fft_size;
         let ifft_size = self.ifft.len();
@@ -109,12 +123,14 @@ impl FcFilter {
         self.ifft.process(&mut buf);
 
         // fixed 25% overlap
-        write_to_file(&mut self.output_file, &buf[ifft_size / 8 .. ifft_size / 8 * 7]);
+        write_to_file(&mut self.output_file, &buf[ifft_size / 8 .. ifft_size / 8 * 7])
     }
 }
 
 
-fn write_to_file(f: &mut File, data: &[Complex<f32>]) {
+fn write_to_file(f: &mut File, data: &[Complex<f32>])
+-> Result<(), Box<dyn Error>>
+{
     use byte::*;
     let mut outbuf: Vec<u8> = vec![0; data.len() * 8];
     let mut o = 0;
@@ -122,14 +138,14 @@ fn write_to_file(f: &mut File, data: &[Complex<f32>]) {
         outbuf.write_with(&mut o, v.re, LE);
         outbuf.write_with(&mut o, v.im, LE);
     }
-    f.write_all(&outbuf).unwrap();
+    f.write_all(&outbuf)?;
+    Ok(())
 }
 
 fn raised_cosine_weights(size: usize) -> Vec<f32> {
     use std::f32::consts::PI;
     let f = (2.0 * PI) / size as f32;
-    let mut w: Vec<f32> = (0..size).map(|i| {
+    (0..size).map(|i| {
         0.5 - 0.5 * ((i as f32) * f).cos()
-    }).collect();
-    w
+    }).collect()
 }
