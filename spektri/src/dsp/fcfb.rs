@@ -43,7 +43,7 @@ impl Fcfb {
     {
         match FcFilter::init(self.fft_size, ifft_size, freq, filename) {
             Ok(filter) => self.filters.push(filter),
-            Err(error) => println!("Error creating filter: {:?}", error),
+            Err(error) => eprintln!("Error creating filter: {:?}", error),
         }
     }
 
@@ -57,7 +57,7 @@ impl Fcfb {
                 if filter.done { break; }
                 match filter.process(fft_result) {
                     Err(error) => {
-                        println!("Error running filter: {:?}", error);
+                        eprintln!("Error running filter: {:?}", error);
                         // Mark failed filter as done, so it gets removed
                         filter.done = true;
                     },
