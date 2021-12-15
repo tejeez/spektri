@@ -12,7 +12,7 @@ use inputformats::*;
 
 
 fn parse_configuration() -> (dsp::DspParams, InputFormat) {
-    use clap::{App};
+    use clap::{App,Arg};
     let matches = App::new("spektri")
         .args_from_usage("
             -s, --fftsize=[SIZE]             'FFT size'
@@ -20,6 +20,7 @@ fn parse_configuration() -> (dsp::DspParams, InputFormat) {
             -a, --averages=[NUMBER]          'Number of FFTs averaged for spectrum'
             -f, --inputformat=[FORMAT]       'Input signal format'
             -F, --spectrumformat=[FORMAT]    'Spectrum output format'
+            -o, --filters=[PARAMETERS]...    'Filter parameters'
             ")
         .get_matches();
 
@@ -42,8 +43,27 @@ fn parse_configuration() -> (dsp::DspParams, InputFormat) {
         spectrum_averages:
             value_t!(matches, "averages", u32)
             .unwrap_or(2000),
+        filters:
+            //Vec::<dsp::FilterParams>::new(),
+            values_t![matches, "filters", String]
+            .unwrap_or_else(|e| {eprintln!("no filters specified: {}", e); Vec::new()})
+            .iter()
+            .map(|x| parse_filter_params(x))
+            .collect::<Vec<dsp::FilterParams>>(),
     },
     inputformat)
+}
+
+
+fn parse_filter_params(s: &str) -> dsp::FilterParams {
+    eprintln!("filter {}", s);
+    dsp::FilterParams {
+        // TODO: parse the parameters.
+        // Now we just use them as filenames to test other parts of the code first
+        freq: 0,
+        ifft_size: 32,
+        filename: s.to_string(),
+    }
 }
 
 

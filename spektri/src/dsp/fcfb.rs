@@ -71,6 +71,14 @@ impl Fcfb {
 }
 
 
+/* Filter parameters */
+pub struct FilterParams/*<'a>*/ {
+    pub freq: isize,  // Center frequency
+    pub ifft_size: usize,
+    //pub bw: isize, // Bandwidth
+    pub filename: String,
+}
+
 /* One filter */
 pub struct FcFilter {
     done: bool,
