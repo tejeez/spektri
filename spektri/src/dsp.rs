@@ -78,11 +78,10 @@ impl DspState {
 
             mfft: MultiFft::init(params.fft_size),
             accu: SpectrumAccumulator::init(params.fft_size, params.complex, params.spectrum_averages, params.spectrum_format),
-            //fb: Fcfb::init_test(params.fft_size), // fixed parameters for first tests
             fb: {
                 let mut fb = Fcfb::init(params.fft_size);
                 for f in params.filters.iter() {
-                    fb.add_filter(f.ifft_size, f.freq, &f.filename);
+                    fb.add_filter(f);
                 }
                 fb
             },

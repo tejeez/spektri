@@ -23,25 +23,12 @@ impl Fcfb {
         }
     }
 
-    // temporary init function for initial testing
-    pub fn init_test(
-        fft_size: usize,
-    ) -> Self
-    {
-        let mut s = Self::init(fft_size);
-        s.add_filter(32, 100, "data/filtered1");
-        s.add_filter(8, 200, "data/filtered2");
-        s
-    }
-
     pub fn add_filter(
         &mut self,
-        ifft_size: usize,
-        freq: isize,
-        filename: &str,
+        p: &FilterParams,
     )
     {
-        match FcFilter::init(self.fft_size, ifft_size, freq, filename) {
+        match FcFilter::init(self.fft_size, &p) {
             Ok(filter) => self.filters.push(filter),
             Err(error) => eprintln!("Error creating filter: {:?}", error),
         }
@@ -72,7 +59,7 @@ impl Fcfb {
 
 
 /* Filter parameters */
-pub struct FilterParams/*<'a>*/ {
+pub struct FilterParams {
     pub freq: isize,  // Center frequency
     pub ifft_size: usize,
     //pub bw: isize, // Bandwidth
@@ -92,9 +79,7 @@ pub struct FcFilter {
 impl FcFilter {
     pub fn init(
         fft_size: usize,
-        ifft_size: usize,
-        freq: isize, // Center frequency
-        filename: &str,
+        p: &FilterParams,
     ) -> Result<Self, Box<dyn Error>>
     {
         // TODO: reuse the planner
@@ -102,10 +87,10 @@ impl FcFilter {
         Ok(Self {
             done: false,
             fft_size: fft_size,
-            freq: freq,
-            weights: raised_cosine_weights(ifft_size),
-            ifft: planner.plan_fft_inverse(ifft_size),
-            output_file: File::create(filename)?,
+            freq: p.freq,
+            weights: raised_cosine_weights(p.ifft_size),
+            ifft: planner.plan_fft_inverse(p.ifft_size),
+            output_file: File::create(&p.filename)?,
         })
     }
 

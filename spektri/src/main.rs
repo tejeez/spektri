@@ -12,7 +12,7 @@ use inputformats::*;
 
 
 fn parse_configuration() -> (dsp::DspParams, InputFormat) {
-    use clap::{App,Arg};
+    use clap::{App};
     let matches = App::new("spektri")
         .args_from_usage("
             -s, --fftsize=[SIZE]             'FFT size'
@@ -44,7 +44,6 @@ fn parse_configuration() -> (dsp::DspParams, InputFormat) {
             value_t!(matches, "averages", u32)
             .unwrap_or(2000),
         filters:
-            //Vec::<dsp::FilterParams>::new(),
             values_t![matches, "filters", String]
             .unwrap_or_else(|e| {eprintln!("no filters specified: {}", e); Vec::new()})
             .iter()
@@ -56,7 +55,6 @@ fn parse_configuration() -> (dsp::DspParams, InputFormat) {
 
 
 fn parse_filter_params(s: &str) -> dsp::FilterParams {
-    eprintln!("filter {}", s);
     dsp::FilterParams {
         // TODO: parse the parameters.
         // Now we just use them as filenames to test other parts of the code first
