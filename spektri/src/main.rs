@@ -45,7 +45,7 @@ fn parse_configuration() -> (dsp::DspParams, InputFormat) {
             .unwrap_or(2000),
         filters:
             values_t![matches, "filters", String]
-            .unwrap_or_else(|e| {eprintln!("no filters specified: {}", e); Vec::new()})
+            .unwrap_or_else(|_| Vec::new())
             .iter()
             .map(|x| parse_filter_params(x))
             .collect::<Vec<dsp::FilterParams>>(),
@@ -55,12 +55,23 @@ fn parse_configuration() -> (dsp::DspParams, InputFormat) {
 
 
 fn parse_filter_params(s: &str) -> dsp::FilterParams {
+    use std::collections::HashMap;
+
+    // , might be a nicer separator for parameters, but clap with
+    // these settings doesn't seem to like arguments with commas,
+    // so let's use ; instead.
+    let m: HashMap<_, _> =
+        s.split(";")
+        .map(|x| {
+            x.split_once('=').unwrap() // TODO: handle errors
+        })
+        .collect();
+
     dsp::FilterParams {
-        // TODO: parse the parameters.
-        // Now we just use them as filenames to test other parts of the code first
-        freq: 0,
-        ifft_size: 32,
-        filename: s.to_string(),
+        // TODO: handle errors
+        freq: m.get("freq").unwrap().parse().unwrap(),
+        ifft_size: m.get("bins").unwrap().parse().unwrap(),
+        filename: m.get("file").unwrap().to_string(),
     }
 }
 
