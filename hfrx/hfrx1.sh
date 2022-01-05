@@ -1,7 +1,7 @@
 #!/bin/sh
 # HF spectrum analyzer for RX888
 
-FFTSIZE=65536
+FFTSIZE=16384
 SAMPLERATE=128000000
 
 # libsddc repository should be cloned into ../../libsddc
@@ -31,5 +31,6 @@ done) \
 | ${TASKSET} ../spektri/target/release/spektri \
 "--inputformat=s16le" \
 "--fftsize=${FFTSIZE}" \
-"--spectrumformat=u16" \
-> "${DATA}/hf_$(date +%Y%m%d_%H%M%S)_${SAMPLERATE}_${FFTSIZE}_16.data"
+"--spectrumformat=u8" \
+"--averages=20000" \
+> "${DATA}/hf_$(date +%Y%m%d_%H%M%S)_${SAMPLERATE}_${FFTSIZE}_8_T.data"

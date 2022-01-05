@@ -107,9 +107,14 @@ fn mainloop_complex(dspparams: dsp::DspParams, fmt: InputFormat) -> std::io::Res
             Err (_) => { break 'mainloop; }
             Ok  (_) => { }
         }
+        let systemtime = std::time::SystemTime::now();
         convert_to_cf32(&rawbuf, &mut buf[bufsize.overlap .. bufsize.total], fmt);
 
-        dsp.process_complex(&buf)?;
+        let metadata = dsp::Metadata {
+            systemtime: systemtime,
+        };
+
+        dsp.process_complex(&buf, &metadata)?;
     }
     Ok(())
 }
@@ -133,9 +138,14 @@ fn mainloop_real(dspparams: dsp::DspParams, fmt: InputFormat) -> std::io::Result
             Err (_) => { break 'mainloop; }
             Ok  (_) => { }
         }
+        let systemtime = std::time::SystemTime::now();
         convert_to_f32(&rawbuf, &mut buf[bufsize.overlap .. bufsize.total], fmt);
 
-        dsp.process_real(&buf)?;
+        let metadata = dsp::Metadata {
+            systemtime: systemtime,
+        };
+
+        dsp.process_real(&buf, &metadata)?;
     }
     Ok(())
 }

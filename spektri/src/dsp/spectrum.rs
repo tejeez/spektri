@@ -24,6 +24,7 @@
 use rustfft::num_complex::Complex;
 use std::io::Write;
 use super::fftutil::*;
+use super::Metadata;
 
 arg_enum! { // needed for command line parsing
     #[derive(Debug, Copy, Clone)]
@@ -57,6 +58,7 @@ impl SpectrumAccumulator {
     pub fn accumulate(
         &mut self,
         fft_results: &[&mut[Complex<f32>]],
+        metadata: &Metadata,
         ) -> std::io::Result<()>
     {
         for fft_result in fft_results.iter() {
@@ -115,7 +117,7 @@ impl SpectrumAccumulator {
                         *out = (db * 2.0 + 250.0).max(0.0).min(255.0) as u8;
                     }
                 }}
-                std::io::stdout().write_all(&printbuf)?;
+                write_record(&printbuf, metadata)?;
 
                 // Reset accumulator
                 for acc_bin in self.acc.iter_mut() {
@@ -126,4 +128,37 @@ impl SpectrumAccumulator {
         }
         Ok(())
     }
+}
+
+fn serialize_metadata(
+    metadata: &Metadata,
+) -> [u8; 12] {
+    use byte::*;
+    use std::time::UNIX_EPOCH;
+
+    let mut s: [u8; 12] = [0; 12];
+    let mut o = 0;
+
+    let (secs, nanosecs) = match metadata.systemtime.duration_since(UNIX_EPOCH) {
+        Ok(d) => { (d.as_secs(), d.subsec_nanos()) },
+        // If duration_since fails, let's just write zeros there.
+        // Maybe we don't really need to handle it in any special way.
+        Err(_) => { (0,0) },
+    };
+
+    s.write_with(&mut o, secs, LE);
+    s.write_with(&mut o, nanosecs, LE);
+
+    s
+}
+
+fn write_record(
+    //file: File,
+    data: &[u8],
+    metadata: &Metadata,
+) -> std::io::Result<()> {
+    let mut stdout = std::io::stdout();
+    stdout.write_all(&serialize_metadata(metadata))?;
+    stdout.write_all(&data)?;
+    Ok(())
 }

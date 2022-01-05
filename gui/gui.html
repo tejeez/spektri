@@ -81,6 +81,9 @@
 		var pixel0_khz; // First pixel in kHz
 		var pixel_khz; // Spacing of pixels in kHz
 		var databytes = 1; // Bytes per bin in data file
+		var record_bytes = 0; // Bytes per measurement record
+		var spectrum_offset = 0; // Offset of spectrum data within a record
+		var has_time = false; // Does the file have timestamps
 
 		/* Various objects */
 		const reader = new FileReader();
@@ -204,14 +207,14 @@
 						// Find the maximum value under one pixel
 						for (let fy=fy0; fy<fy1; fy++) {
 							if (databytes == 1) { // 8-bit data
-								let p  = bins * fy + fx0;
-								let p1 = bins * fy + fx1;
+								let p  = spectrum_offset + record_bytes * fy + fx0;
+								let p1 = spectrum_offset + record_bytes * fy + fx1;
 								for (;p < p1;) {
 									m = Math.max(m, view[p++] << 4);
 								}
 							} else { // 16-bit data
-								let p  = (bins * fy + fx0) * 2;
-								let p1 = (bins * fy + fx1) * 2;
+								let p  = spectrum_offset + record_bytes * fy + fx0 * 2;
+								let p1 = spectrum_offset + record_bytes * fy + fx1 * 2;
 								for (;p < p1; p += 2) {
 									m = Math.max(m, (view[p] << 8) | view[p+1]);
 								}
@@ -237,10 +240,18 @@
 			s = filename.split(".")[0].split("_");
 			if (s.length >= 5) {
 				databytes = (s.length >= 6 && s[5] == "16") ? 2 : 1;
+				has_time = (s.length >= 7 && s[6] == "T");
 				set_data_parameters(s[4] * 1, s[3] * 1);
 			}
+			record_bytes = bins * databytes;
+			if (has_time) {
+				record_bytes += 12;
+				spectrum_offset = 12;
+			} else {
+				spectrum_offset = 0;
+			}
 
-			nrecords = Math.floor(view.length / (bins * databytes));
+			nrecords = Math.floor(view.length / record_bytes);
 			update_slider_bounds();
 
 			update_zoom();
@@ -253,11 +264,28 @@
 		document.getElementById("fileinput").
 		addEventListener("change", file_changed);
 
+		// Read little endian number of given length (in bytes) from a view
+		function read_le(v, p, l) {
+			let n = 0, shift = 0;
+			for (let i = 0; i < l; i++) {
+				n |= v[p++] << shift;
+				shift += 8;
+			}
+			return n;
+		}
+
 		/*
 		 * Info field.
 		 */
 		function update_info(ev) {
-			info.innerText = "" + (pixel0_khz + pixel_khz * ev.offsetX).toFixed(1) + " kHz";
+			let t = "";
+			if (has_time) {
+				let fy = Math.round(ev.offsetY);
+				t_s  = read_le(view, record_bytes * fy + 0, 8);
+				t_ns = read_le(view, record_bytes * fy + 8, 4);
+				t = ", " + (new Date(1e3 * t_s + 1e-6 * t_ns).toUTCString());
+			}
+			info.innerText = "" + (pixel0_khz + pixel_khz * ev.offsetX).toFixed(1) + " kHz" + t;
 		}
 		canvas.addEventListener("mousemove", update_info);
 

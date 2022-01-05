@@ -37,6 +37,7 @@ impl Fcfb {
     pub fn process(
         &mut self,
         fft_results: &[&mut[Complex<f32>]],
+        _metadata: &super::Metadata,
     )
     {
         self.filters.par_iter_mut().for_each( |filter| {

@@ -34,6 +34,11 @@ pub struct InputBufferSize {
     pub total:   usize, // Total size of the buffer (new+overlap)
 }
 
+// metadata for buffers of samples
+pub struct Metadata {
+    pub systemtime: std::time::SystemTime,
+}
+
 pub struct DspState {
     fft_size: usize,
     ffts_per_buf: usize,
@@ -98,7 +103,11 @@ impl DspState {
         })
     }
 
-    pub fn process_complex(&mut self, input_buffer: &[Complex<f32>]) -> std::io::Result<()> {
+    pub fn process_complex(
+        &mut self,
+        input_buffer: &[Complex<f32>],
+        metadata: &Metadata,
+    ) -> std::io::Result<()> {
         let fft_interval = self.fft_interval;
         let fft_size = self.fft_size;
 
@@ -112,12 +121,16 @@ impl DspState {
             ).collect::<Vec<&[Complex<f32>]>>(),
             &mut resultbufs
         );
-        self.accu.accumulate(&resultbufs)?;
-        self.fb.process(&resultbufs);
+        self.accu.accumulate(&resultbufs, &metadata)?;
+        self.fb.process(&resultbufs, &metadata);
         Ok(())
     }
 
-    pub fn process_real(&mut self, input_buffer: &[f32]) -> std::io::Result<()> {
+    pub fn process_real(
+        &mut self,
+        input_buffer: &[f32],
+        metadata: &Metadata,
+    ) -> std::io::Result<()> {
         let fft_interval = self.fft_interval;
         let fft_size = self.fft_size;
 
@@ -131,8 +144,8 @@ impl DspState {
             ).collect::<Vec<&[f32]>>(),
             &mut resultbufs
         );
-        self.accu.accumulate(&resultbufs)?;
-        self.fb.process(&resultbufs);
+        self.accu.accumulate(&resultbufs, metadata)?;
+        self.fb.process(&resultbufs, metadata);
         Ok(())
     }
 }
