@@ -79,7 +79,8 @@
 		var bin_khz; // Spacing of bins in kHz
 		var canvasw, canvash; // Size of the canvas
 		var pixel0_khz; // First pixel in kHz
-		var pixel_khz; // Spacing of pixels in kHz
+		var pixel_khz; // Spacing of pixels in kHz (in x direction)
+		var zoomy = 1; // Records per pixel (in y direction)
 		var databytes = 1; // Bytes per bin in data file
 		var record_bytes = 0; // Bytes per measurement record
 		var spectrum_offset = 0; // Offset of spectrum data within a record
@@ -187,7 +188,7 @@
 			pixel0_khz = bin_khz * fx_offset;
 
 			const zoomx = Math.pow(0.5, slider6.value);
-			const zoomy = Math.pow(0.5, slider4.value);
+			      zoomy = Math.pow(0.5, slider4.value);
 			const zoomxi = Math.max(1, Math.round(zoomx));
 			const zoomyi = Math.max(1, Math.round(zoomy));
 			pixel_khz = bin_khz * zoomx;
@@ -280,7 +281,8 @@
 		function update_info(ev) {
 			let t = "";
 			if (has_time) {
-				let fy = Math.round(ev.offsetY);
+				let y = Math.round(ev.offsetY);
+				let fy = Math.floor(y * zoomy);
 				t_s  = read_le(view, record_bytes * fy + 0, 8);
 				t_ns = read_le(view, record_bytes * fy + 8, 4);
 				t = ", " + (new Date(1e3 * t_s + 1e-6 * t_ns).toUTCString());
