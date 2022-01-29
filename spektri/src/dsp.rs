@@ -1,5 +1,6 @@
 use rustfft::num_complex::Complex;
 use std::f32::consts::PI;
+use zmq;
 
 mod multifft;
 use multifft::MultiFft;
@@ -13,6 +14,7 @@ use fcfb::Fcfb;
 pub use fcfb::FilterParams;
 
 pub mod fftutil;
+pub mod output;
 
 
 // Parameters for signal processing
@@ -107,6 +109,7 @@ impl DspState {
         &mut self,
         input_buffer: &[Complex<f32>],
         metadata: &Metadata,
+        sock: &zmq::Socket,
     ) -> std::io::Result<()> {
         let fft_interval = self.fft_interval;
         let fft_size = self.fft_size;
@@ -121,8 +124,8 @@ impl DspState {
             ).collect::<Vec<&[Complex<f32>]>>(),
             &mut resultbufs
         );
-        self.accu.accumulate(&resultbufs, &metadata)?;
-        self.fb.process(&resultbufs, &metadata);
+        self.accu.accumulate(&resultbufs, metadata)?;
+        self.fb.process(&resultbufs, metadata, sock);
         Ok(())
     }
 
@@ -130,6 +133,7 @@ impl DspState {
         &mut self,
         input_buffer: &[f32],
         metadata: &Metadata,
+        sock: &zmq::Socket,
     ) -> std::io::Result<()> {
         let fft_interval = self.fft_interval;
         let fft_size = self.fft_size;
@@ -145,7 +149,7 @@ impl DspState {
             &mut resultbufs
         );
         self.accu.accumulate(&resultbufs, metadata)?;
-        self.fb.process(&resultbufs, metadata);
+        self.fb.process(&resultbufs, metadata, sock);
         Ok(())
     }
 }

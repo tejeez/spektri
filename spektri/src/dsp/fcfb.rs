@@ -1,16 +1,26 @@
 /* Fast-convolution filter bank */
 
-use std::fs::File;
 use std::error::Error;
-use std::io::prelude::*;
 use rayon::prelude::*;
 use rustfft::{FftPlanner, num_complex::Complex};
+use zmq;
+
 use super::fftutil::*;
+use super::output::*;
+use super::Metadata;
 
 /* Bank of filters */
 pub struct Fcfb {
     fft_size: usize,
-    filters: Vec<FcFilter>,
+    filters: Vec<Filter>,
+}
+
+/* One filter */
+pub struct Filter {
+    dsp: FilterDsp,
+    outbuf: Vec<u8>,
+    outsize: usize,
+    //output: Output,
 }
 
 impl Fcfb {
@@ -28,8 +38,13 @@ impl Fcfb {
         p: &FilterParams,
     )
     {
-        match FcFilter::init(self.fft_size, &p) {
-            Ok(filter) => self.filters.push(filter),
+        match FilterDsp::init(self.fft_size, &p) {
+            Ok(filter) => self.filters.push(Filter {
+                dsp: filter,
+                // TODO: calculate sufficient size for the output buffer
+                outbuf: vec![0; 100000],
+                outsize: 0,
+            }),
             Err(error) => eprintln!("Error creating filter: {:?}", error),
         }
     }
@@ -37,24 +52,32 @@ impl Fcfb {
     pub fn process(
         &mut self,
         fft_results: &[&mut[Complex<f32>]],
-        _metadata: &super::Metadata,
+        metadata: &Metadata,
+        sock: &zmq::Socket, // ZeroMQ socket used to publish all results
     )
     {
+        // Process multiple filters in parallel
         self.filters.par_iter_mut().for_each( |filter| {
+            let mut offset = 0;
+            // TODO sample sequence numbers
+            serialize_metadata(&mut filter.outbuf, &mut offset, &metadata, 0);
             for fft_result in fft_results.iter() {
-                if filter.done { break; }
-                match filter.process(fft_result) {
-                    Err(error) => {
-                        eprintln!("Error running filter: {:?}", error);
-                        // Mark failed filter as done, so it gets removed
-                        filter.done = true;
-                    },
-                    Ok(_) => {}
-                }
+                if filter.dsp.done { break; }
+                filter.dsp.process(fft_result, &mut filter.outbuf, &mut offset);
             }
+            filter.outsize = offset;
         });
+
+        // Do I/O outside of the parallel part.
+        // TODO: use output.rs once it's working
+        self.filters.iter().for_each( |filter| {
+            sock.send("dtest", zmq::SNDMORE);
+            sock.send(&filter.outbuf[0..filter.outsize], 0);
+        });
+
         // Remove filters that are done
-        self.filters.retain(|f| !f.done);
+        // (not actually used for anything at the moment)
+        self.filters.retain(|f| !f.dsp.done);
     }
 }
 
@@ -67,21 +90,23 @@ pub struct FilterParams {
     pub filename: String,
 }
 
-/* One filter */
-pub struct FcFilter {
+/* DSP state of a filter.
+ * This struct does not contain any I/O related things. */
+pub struct FilterDsp {
+    // TODO: is done useful anymore?
     done: bool,
     fft_size: usize,
     freq: isize,
     weights: Vec<f32>, // Frequency response
     ifft: std::sync::Arc<dyn rustfft::Fft<f32>>, // RustFFT plan
-    output_file: File,
 }
 
-impl FcFilter {
+impl FilterDsp {
     pub fn init(
         fft_size: usize,
         p: &FilterParams,
     ) -> Result<Self, Box<dyn Error>>
+    // TODO: Box<dyn Error> is not used here anymore, so use something else
     {
         // TODO: reuse the planner
         let mut planner = FftPlanner::new();
@@ -91,15 +116,15 @@ impl FcFilter {
             freq: p.freq,
             weights: raised_cosine_weights(p.ifft_size),
             ifft: planner.plan_fft_inverse(p.ifft_size),
-            output_file: File::create(&p.filename)?,
         })
     }
 
     pub fn process(
         &mut self,
         fft_result: &[Complex<f32>],
-    ) -> Result<(), Box<dyn Error>>
-    {
+        outbuf: &mut [u8],
+        outbuf_offset: &mut usize,
+    ) {
         let fft_size = self.fft_size;
         let ifft_size = self.ifft.len();
         let freq = self.freq;
@@ -117,24 +142,17 @@ impl FcFilter {
         self.ifft.process(&mut buf);
 
         // fixed 25% overlap
-        write_to_file(&mut self.output_file, &buf[ifft_size / 8 .. ifft_size / 8 * 7])
+        let result = &buf[ifft_size / 8 .. ifft_size / 8 * 7];
+
+        // Write result to output buffer
+        use byte::*;
+        for v in result.into_iter() {
+            outbuf.write_with(outbuf_offset, v.re, LE);
+            outbuf.write_with(outbuf_offset, v.im, LE);
+        }
     }
 }
 
-
-fn write_to_file(f: &mut File, data: &[Complex<f32>])
--> Result<(), Box<dyn Error>>
-{
-    use byte::*;
-    let mut outbuf: Vec<u8> = vec![0; data.len() * 8];
-    let mut o = 0;
-    for v in data.into_iter() {
-        outbuf.write_with(&mut o, v.re, LE);
-        outbuf.write_with(&mut o, v.im, LE);
-    }
-    f.write_all(&outbuf)?;
-    Ok(())
-}
 
 fn raised_cosine_weights(size: usize) -> Vec<f32> {
     use std::f32::consts::PI;

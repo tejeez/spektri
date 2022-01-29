@@ -1,6 +1,7 @@
 use std;
 use std::io::Read;
 use rustfft::num_complex::Complex;
+use zmq;
 
 #[macro_use]
 extern crate clap;
@@ -21,6 +22,7 @@ fn parse_configuration() -> (dsp::DspParams, InputFormat) {
             -f, --inputformat=[FORMAT]       'Input signal format'
             -F, --spectrumformat=[FORMAT]    'Spectrum output format'
             -o, --filters=[PARAMETERS]...    'Filter parameters'
+                --zmqbind=[ADDRESS]          'ZeroMQ binding address'
             ")
         .get_matches();
 
@@ -79,16 +81,26 @@ fn parse_filter_params(s: &str) -> dsp::FilterParams {
 fn main() -> std::io::Result<()> {
     let (dspparams, inputformat) = parse_configuration();
 
+    let zctx = zmq::Context::new();
+    let sock = zctx.socket(zmq::PUB).unwrap();
+    // TODO: set SNDBUF and HWM sizes
+    // TODO: make binding address a command line parameter
+    sock.bind("ipc:///tmp/spektri.zmq").unwrap();
+
     if is_input_format_complex(inputformat) {
-        mainloop_complex(dspparams, inputformat)
+        mainloop_complex(dspparams, inputformat, sock)
     } else {
-        mainloop_real(   dspparams, inputformat)
+        mainloop_real(   dspparams, inputformat, sock)
     }?;
     Ok(())
 }
 
 
-fn mainloop_complex(dspparams: dsp::DspParams, fmt: InputFormat) -> std::io::Result<()> {
+fn mainloop_complex(
+    dspparams: dsp::DspParams,
+    fmt: InputFormat,
+    sock: zmq::Socket,
+) -> std::io::Result<()> {
     let (mut dsp, bufsize) = dsp::DspState::init(dspparams);
 
     // buffer for raw input data
@@ -114,12 +126,16 @@ fn mainloop_complex(dspparams: dsp::DspParams, fmt: InputFormat) -> std::io::Res
             systemtime: systemtime,
         };
 
-        dsp.process_complex(&buf, &metadata)?;
+        dsp.process_complex(&buf, &metadata, &sock)?;
     }
     Ok(())
 }
 
-fn mainloop_real(dspparams: dsp::DspParams, fmt: InputFormat) -> std::io::Result<()> {
+fn mainloop_real(
+    dspparams: dsp::DspParams,
+    fmt: InputFormat,
+    sock: zmq::Socket,
+) -> std::io::Result<()> {
     let (mut dsp, bufsize) = dsp::DspState::init(dspparams);
 
     // buffer for raw input data
@@ -145,7 +161,7 @@ fn mainloop_real(dspparams: dsp::DspParams, fmt: InputFormat) -> std::io::Result
             systemtime: systemtime,
         };
 
-        dsp.process_real(&buf, &metadata)?;
+        dsp.process_real(&buf, &metadata, &sock)?;
     }
     Ok(())
 }
