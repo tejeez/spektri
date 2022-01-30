@@ -124,7 +124,7 @@ impl DspState {
             ).collect::<Vec<&[Complex<f32>]>>(),
             &mut resultbufs
         );
-        self.accu.accumulate(&resultbufs, metadata)?;
+        self.accu.accumulate(&resultbufs, metadata, sock)?;
         self.fb.process(&resultbufs, metadata, sock);
         Ok(())
     }
@@ -148,7 +148,7 @@ impl DspState {
             ).collect::<Vec<&[f32]>>(),
             &mut resultbufs
         );
-        self.accu.accumulate(&resultbufs, metadata)?;
+        self.accu.accumulate(&resultbufs, metadata, sock)?;
         self.fb.process(&resultbufs, metadata, sock);
         Ok(())
     }

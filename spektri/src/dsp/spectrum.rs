@@ -23,8 +23,10 @@
 
 use rustfft::num_complex::Complex;
 use std::io::Write;
+use zmq;
 use super::fftutil::*;
 use super::Metadata;
+use super::output::*;
 
 arg_enum! { // needed for command line parsing
     #[derive(Debug, Copy, Clone)]
@@ -37,6 +39,7 @@ pub struct SpectrumAccumulator {
     fft_size: usize, // parameter
     averages: u32, // parameter
     outfmt: SpectrumFormat, // parameter
+    output: Output,
 }
 
 impl SpectrumAccumulator {
@@ -52,6 +55,10 @@ impl SpectrumAccumulator {
             fft_size: fft_size,
             averages: averages,
             outfmt: outfmt,
+            output: Output::init(OutputParams {
+                filename: None,
+                topic: Some("spectrum".to_string())
+            }),
         }
     }
 
@@ -59,6 +66,7 @@ impl SpectrumAccumulator {
         &mut self,
         fft_results: &[&mut[Complex<f32>]],
         metadata: &Metadata,
+        sock: &zmq::Socket, // ZeroMQ socket used to publish all results
         ) -> std::io::Result<()>
     {
         for fft_result in fft_results.iter() {
@@ -92,9 +100,13 @@ impl SpectrumAccumulator {
                 // Write the result in binary format into stdout
 
                 let outfmt = self.outfmt;
-                let mut printbuf: Vec<u8> = vec![
+                let mut outbuf: Vec<u8> = vec![
                     0;
+                    100 + // TODO correct size of sample metadata
                     self.acc.len() * match outfmt { SpectrumFormat::U16=>2, SpectrumFormat::U8=>1 }];
+                let mut offset = 0;
+                // TODO sequence numbers
+                serialize_metadata(&mut outbuf, &mut offset, &metadata, 0);
 
                 // divide accumulator bins by self.accn,
                 // but do it as an addition after conversion to dB scale
@@ -102,22 +114,24 @@ impl SpectrumAccumulator {
 
                 match outfmt {
                 SpectrumFormat::U16 => {
-                    for (acc_bin, out) in self.acc.iter().zip(printbuf.chunks_mut(2)) {
+                    for (acc_bin, out) in self.acc.iter().zip(outbuf[offset..].chunks_mut(2)) {
                         let db = acc_bin.log10() * 10.0 + db_plus;
                         // quantize to 0.05 dB per LSB, full scale at 4000, clamp to 12 bits
                         let o = (db * 20.0 + 4000.0).max(0.0).min(4095.0) as u16;
                         out[0] = (o >> 8) as u8;
                         out[1] = (o & 0xFF) as u8;
+                        offset += 2; // TODO maybe just use byte crate here as well
                     }
                 },
                 SpectrumFormat::U8 => {
-                    for (acc_bin, out) in self.acc.iter().zip(printbuf.iter_mut()) {
+                    for (acc_bin, out) in self.acc.iter().zip(outbuf[offset..].iter_mut()) {
                         let db = acc_bin.log10() * 10.0 + db_plus;
                         // quantize to 0.5 dB per LSB, full scale at 250
                         *out = (db * 2.0 + 250.0).max(0.0).min(255.0) as u8;
+                        offset += 1; // TODO maybe just use byte crate here as well
                     }
                 }}
-                write_record(&printbuf, metadata)?;
+                self.output.write(&outbuf[0..offset], &sock);
 
                 // Reset accumulator
                 for acc_bin in self.acc.iter_mut() {
@@ -128,37 +142,4 @@ impl SpectrumAccumulator {
         }
         Ok(())
     }
-}
-
-fn serialize_metadata(
-    metadata: &Metadata,
-) -> [u8; 12] {
-    use byte::*;
-    use std::time::UNIX_EPOCH;
-
-    let mut s: [u8; 12] = [0; 12];
-    let mut o = 0;
-
-    let (secs, nanosecs) = match metadata.systemtime.duration_since(UNIX_EPOCH) {
-        Ok(d) => { (d.as_secs(), d.subsec_nanos()) },
-        // If duration_since fails, let's just write zeros there.
-        // Maybe we don't really need to handle it in any special way.
-        Err(_) => { (0,0) },
-    };
-
-    s.write_with(&mut o, secs, LE);
-    s.write_with(&mut o, nanosecs, LE);
-
-    s
-}
-
-fn write_record(
-    //file: File,
-    data: &[u8],
-    metadata: &Metadata,
-) -> std::io::Result<()> {
-    let mut stdout = std::io::stdout();
-    stdout.write_all(&serialize_metadata(metadata))?;
-    stdout.write_all(&data)?;
-    Ok(())
 }

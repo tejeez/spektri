@@ -20,7 +20,7 @@ pub struct Filter {
     dsp: FilterDsp,
     outbuf: Vec<u8>,
     outsize: usize,
-    //output: Output,
+    output: Output,
 }
 
 impl Fcfb {
@@ -44,6 +44,10 @@ impl Fcfb {
                 // TODO: calculate sufficient size for the output buffer
                 outbuf: vec![0; 100000],
                 outsize: 0,
+                output: Output::init(OutputParams {
+                    filename: None,
+                    topic: Some("test".to_string())
+                }),
             }),
             Err(error) => eprintln!("Error creating filter: {:?}", error),
         }
@@ -69,10 +73,8 @@ impl Fcfb {
         });
 
         // Do I/O outside of the parallel part.
-        // TODO: use output.rs once it's working
-        self.filters.iter().for_each( |filter| {
-            sock.send("dtest", zmq::SNDMORE);
-            sock.send(&filter.outbuf[0..filter.outsize], 0);
+        self.filters.iter_mut().for_each( |filter| {
+            filter.output.write(&filter.outbuf[0..filter.outsize], sock);
         });
 
         // Remove filters that are done

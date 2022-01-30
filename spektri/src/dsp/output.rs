@@ -7,22 +7,22 @@
  * be useful to keep a consistent ordering of output messages.
  */
 
-/*use std::fs::File;
+use std::fs::File;
 use std::error::Error;
-use std::io::prelude::*;*/
+use std::io::prelude::*;
 use byte;
 //use zmq;
 use super::Metadata;
 
-/*
+
 pub struct OutputParams {
 	pub filename: Option<String>,
 	pub topic:    Option<String>, // ZeroMQ publishing topic
 }
 
 pub struct Output {
-	file:  Option<File>,
-	topic: Option<String>,//TODO
+	file:   Option<File>,
+	topic:  Option<(Vec<u8>, Vec<u8>)>,
 }
 
 impl Output {
@@ -30,34 +30,41 @@ impl Output {
 		params: OutputParams,
 	) -> Self {
 		Self {
-			file: if let Some(filename) = params.filename {
+			file: if let Some(filename) = &params.filename {
 				//File::create(filename)
 				None
 			} else {
 				// No file output
 				None
 			},
-			topic: params.topic,
+			topic: if let Some(topic) = &params.topic {
+				Some((
+					("d".to_owned() + &topic).into_bytes(), // data
+					("m".to_owned() + &topic).into_bytes(), // metadata
+				))
+			} else {
+				None
+			},
 		}
 	}
 
 	pub fn write(
 		&mut self,
 		buf: &[u8],
+		sock: &zmq::Socket,
 	) -> Result<(), Box<dyn Error>> {
-		if let Some(topic) = self.topic {
-			sock.send(topic, zmq::SNDMORE);
+		if let Some(topic) = &self.topic {
+			sock.send(&topic.0, zmq::SNDMORE);
 			sock.send(&buf, 0);
 		}
 
-		if let Some(file) = self.file {
+		if let Some(file) = &mut self.file {
 			file.write_all(&buf)?;
 		}
 
 		Ok(())
 	}
 }
-*/
 
 
 pub fn serialize_metadata(
