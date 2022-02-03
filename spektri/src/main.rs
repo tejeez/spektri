@@ -12,7 +12,7 @@ mod inputformats;
 use inputformats::*;
 
 
-fn parse_configuration() -> (dsp::DspParams, InputFormat) {
+fn parse_configuration() -> (dsp::DspParams, InputFormat, String) {
     use clap::{App};
     let matches = App::new("spektri")
         .args_from_usage("
@@ -52,7 +52,9 @@ fn parse_configuration() -> (dsp::DspParams, InputFormat) {
             .map(|x| parse_filter_params(x))
             .collect::<Vec<dsp::FilterParams>>(),
     },
-    inputformat)
+    inputformat,
+    value_t!(matches, "zmqbind", String).unwrap_or("ipc:///tmp/spektri.zmq".into())
+    )
 }
 
 
@@ -73,19 +75,21 @@ fn parse_filter_params(s: &str) -> dsp::FilterParams {
         // TODO: handle errors
         freq: m.get("freq").unwrap().parse().unwrap(),
         ifft_size: m.get("bins").unwrap().parse().unwrap(),
-        filename: m.get("file").unwrap().to_string(),
+        output: dsp::output::OutputParams {
+            filename: if let Some(v) = m.get("file")  { Some(v.to_string()) } else { None },
+            topic:    if let Some(v) = m.get("topic") { Some(v.to_string()) } else { None },
+        },
     }
 }
 
 
 fn main() -> std::io::Result<()> {
-    let (dspparams, inputformat) = parse_configuration();
+    let (dspparams, inputformat, zmqbind) = parse_configuration();
 
     let zctx = zmq::Context::new();
     let sock = zctx.socket(zmq::PUB).unwrap();
     // TODO: set SNDBUF and HWM sizes
-    // TODO: make binding address a command line parameter
-    sock.bind("ipc:///tmp/spektri.zmq").unwrap();
+    sock.bind(&zmqbind).unwrap();
 
     if is_input_format_complex(inputformat) {
         mainloop_complex(dspparams, inputformat, sock)

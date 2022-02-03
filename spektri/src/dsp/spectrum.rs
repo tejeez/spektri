@@ -55,7 +55,7 @@ impl SpectrumAccumulator {
             fft_size: fft_size,
             averages: averages,
             outfmt: outfmt,
-            output: Output::init(OutputParams {
+            output: Output::init(&OutputParams {
                 filename: None,
                 topic: Some("spectrum".to_string())
             }),

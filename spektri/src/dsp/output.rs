@@ -27,12 +27,17 @@ pub struct Output {
 
 impl Output {
 	pub fn init(
-		params: OutputParams,
+		params: &OutputParams,
 	) -> Self {
 		Self {
 			file: if let Some(filename) = &params.filename {
-				//File::create(filename)
-				None
+				match File::create(filename) {
+					Ok(file) => { Some(file) },
+					Err(err) => {
+						eprintln!("Could not create file: {}", err);
+						None
+					}
+				}
 			} else {
 				// No file output
 				None

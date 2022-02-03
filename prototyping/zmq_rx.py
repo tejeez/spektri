@@ -33,4 +33,8 @@ def main(sub_topic = "test", address = "ipc:///tmp/spektri.zmq", filename = "../
             output_file.write(msg[24:])
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if len(sys.argv) == 3:
+        main(sub_topic = sys.argv[1], filename = sys.argv[2])
+    else:
+        main()

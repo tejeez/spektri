@@ -44,10 +44,7 @@ impl Fcfb {
                 // TODO: calculate sufficient size for the output buffer
                 outbuf: vec![0; 100000],
                 outsize: 0,
-                output: Output::init(OutputParams {
-                    filename: None,
-                    topic: Some("test".to_string())
-                }),
+                output: Output::init(&p.output),
             }),
             Err(error) => eprintln!("Error creating filter: {:?}", error),
         }
@@ -89,7 +86,7 @@ pub struct FilterParams {
     pub freq: isize,  // Center frequency
     pub ifft_size: usize,
     //pub bw: isize, // Bandwidth
-    pub filename: String,
+    pub output: OutputParams,
 }
 
 /* DSP state of a filter.
