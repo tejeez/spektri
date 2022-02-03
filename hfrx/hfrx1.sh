@@ -23,6 +23,8 @@ mkdir -p "${DATA}"
 TASKSET=
 TASKSET2=
 
+../tools/save_to_files.py spectrum "data/hf_%Y%m%d_%H%M%S_${SAMPLERATE}_${FFTSIZE}_8_T.data" 900 & PID1=$!
+
 # Put sddc_stream in loop, so that it is restarted if it fails
 (while true; do
  ${TASKSET2} "${LIBSDDC}/build/src/sddc_stream" "${LIBSDDC}/firmware/SDDC_FX3.img" "${SAMPLERATE}"
@@ -32,5 +34,6 @@ done) \
 "--inputformat=s16le" \
 "--fftsize=${FFTSIZE}" \
 "--spectrumformat=u8" \
-"--averages=20000" \
-> "${DATA}/hf_$(date +%Y%m%d_%H%M%S)_${SAMPLERATE}_${FFTSIZE}_8_T.data"
+"--averages=20000"
+
+kill $PID1
