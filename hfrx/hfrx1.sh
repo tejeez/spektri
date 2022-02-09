@@ -23,7 +23,7 @@ mkdir -p "${DATA}"
 TASKSET=
 TASKSET2=
 
-../tools/save_to_files.py spectrum "data/hf_%Y%m%d_%H%M%S_${SAMPLERATE}_${FFTSIZE}_8_T.data" 900 & PID1=$!
+../tools/save_to_files.py spectrum "../data/hf_%Y%m%d_%H%M%S_${SAMPLERATE}_${FFTSIZE}_8_T.data" 86400 & PID1=$!
 
 # Put sddc_stream in loop, so that it is restarted if it fails
 (while true; do
@@ -34,6 +34,13 @@ done) \
 "--inputformat=s16le" \
 "--fftsize=${FFTSIZE}" \
 "--spectrumformat=u8" \
-"--averages=20000"
+"--averages=50000" \
+"--filters" \
+ "freq=432;bins=64;topic=500000 3625000  " \
+ "freq=576;bins=32;topic=250000 4625000  " \
+ "freq=880;bins=64;topic=500000 7125000  " \
+ "freq=1264;bins=64;topic=500000 10125000  " \
+ "freq=1776;bins=64;topic=500000 14125000  " \
+
 
 kill $PID1
