@@ -112,7 +112,13 @@ class RationalDdc:
 
 
 def DesignDdc(fs_in, fs_out, fc = 0):
-    """Design a DDC for a given input sample rate, output sample rate and center frequency."""
+    """Design a DDC for a given input sample rate, output sample rate and center frequency.
+
+    To keep the filter reasonably short, it has a fairly wide transition band
+    around the output Nyquist frequency. The upper half of output spectrum
+    contains significant aliasing products, so the output sample rate
+    should be oversampled by at least a factor of 2.
+    """
     fs_in  = Fraction(fs_in)
     fs_out = Fraction(fs_out)
     fc     = Fraction(fc)
@@ -165,5 +171,30 @@ def test(fs_in = 1000, fs_out = 300, fc = 150):
         signalout = ddc.execute(signalin)
         sys.stdout.buffer.write(signalout.tobytes())
 
+def benchmark(fs_in = 500000, fs_out = 16000, fc = 500, buflen = 4096, repeats = 1000):
+    """Benchmark the polyphase DDC algorithm."""
+    import time
+
+    ddc = DesignDdc(fs_in, fs_out, fc)
+
+    signalin = \
+        (np.random.normal(size=buflen) + \
+         np.random.normal(size=buflen) *1j) \
+        .astype(np.complex64)
+    # Call it once to make sure numba has compiled it
+    # before measuring execution time.
+    signalout = ddc.execute(signalin)
+
+    t1 = time.perf_counter_ns()
+    for _ in range(repeats):
+        signalout = ddc.execute(signalin)
+    t2 = time.perf_counter_ns()
+    samples_per_nanosecond = buflen * repeats / (t2-t1)
+    print("%.3f MS/s" % (samples_per_nanosecond * 1e3))
+
 if __name__ == "__main__":
-    test()
+    import sys
+    if len(sys.argv) >= 2 and sys.argv[1] == 'b':
+        benchmark()
+    else:
+        test()
