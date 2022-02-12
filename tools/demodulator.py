@@ -18,7 +18,7 @@ class SsbAgc:
 
     def execute(self, input):
         attack = nb.float32(0.001)
-        release = nb.float32(0.00005)
+        release = nb.float32(0.0002)
 
         pa = self.pa
         output = np.zeros_like(input)
@@ -54,7 +54,9 @@ class SsbAgc:
 
 
 class SsbDemodulator:
-    """Demodulate SSB by Weaver method."""
+    """Demodulate SSB by Weaver method.
+
+    Output is audio at a sample rate of 8 kHz."""
     def __init__(self, fs_in, fc_in, fc_demod, mode='lsb'):
         sideband = 1 if mode == 'usb' else -1
         # Design the DDC to move center frequency to 0
@@ -62,19 +64,21 @@ class SsbDemodulator:
         self.ddc = ddc.DesignDdc(fs_in, 16000, fc_demod + 1500*sideband - fc_in)
 
         # Follow the resampler by one more filtering stage
-        self.filtb, self.filta = signal.butter(4, 1400, fs=16000)
-        self.filtz = signal.lfiltic(self.filtb, self.filta, np.zeros(1))
+        self.filts = signal.butter(10, 1300, fs=16000, output='sos')
+        self.filtz = signal.sosfilt_zi(self.filts) * np.complex64(0)
 
         # Mixer to shift the signal from 0 center frequency to audio band.
-        # Let's use FractionalDdc here as well for simplicity,
-        # even though we're not using the resampling feature.
-        self.mixer2 = ddc.RationalDdc(np.ones(1, dtype=np.float32), freq_num=3*sideband, freq_den=32)
+        # Also decimate by 2. The signal has been filtered already, so
+        # decimation can be done by just dropping every second sample.
+        # Let's use RationalDdc here as well for simplicity,
+        # even though it's not the most efficient solution.
+        self.mixer2 = ddc.RationalDdc(np.ones(1, dtype=np.float32), decimation=2, freq_num=3*sideband, freq_den=32)
 
         self.agc = SsbAgc()
 
     def execute(self, input):
         s = self.ddc.execute(input)
-        s, self.filtz = signal.lfilter(self.filtb, self.filta, s, zi=self.filtz)
+        s, self.filtz = signal.sosfilt(self.filts, s, zi=self.filtz)
         s = self.mixer2.execute(s)
         s = self.agc.execute(s)
         return s.real
