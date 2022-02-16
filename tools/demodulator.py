@@ -83,3 +83,28 @@ class SsbDemodulator:
         s = self.agc.execute(s)
         return s.real
 
+
+def benchmark(fs_in = 500000, buflen = 512, repeats = 1000):
+    """Benchmark the polyphase DDC algorithm."""
+    import time
+
+    demod = SsbDemodulator(fs_in, 3625000, 3699000, 'lsb')
+
+    signalin = \
+        (np.random.normal(size=buflen) + \
+         np.random.normal(size=buflen) *1j) \
+        .astype(np.complex64)
+    # Call it once to make sure numba has compiled it
+    # before measuring execution time.
+    signalout = demod.execute(signalin)
+
+    t1 = time.perf_counter_ns()
+    for _ in range(repeats):
+        signalout = demod.execute(signalin)
+    t2 = time.perf_counter_ns()
+    samples_per_nanosecond = buflen * repeats / (t2-t1)
+    print("%.3f MS/s" % (samples_per_nanosecond * 1e3))
+
+if __name__ == "__main__":
+    import sys
+    benchmark()
