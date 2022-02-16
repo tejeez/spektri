@@ -12,7 +12,7 @@ import numba as nb
 from scipy import signal
 
 
-@nb.jit
+@nb.njit
 def _sinewave(num, den):
     """Generate a complex sine wave of frequency sample_rate*num/den.
     Length is chosen such that a continuous sine wave
@@ -27,19 +27,17 @@ def _sinewave(num, den):
 
 
 @nb.jitclass([
-    # float32 would be enough for the taps, but np.dot doesn't support taking product of a real and a complex vector.
-    # TODO: maybe store real and imag parts of firbuf separately as float32
-    ('taps', nb.complex64[:]),
+    ('taps', nb.float32[:]),
     ('interpolation', nb.uint32),
     ('decimation', nb.uint32),
-    ('firlen', nb.uint64),
+    ('firlen', nb.intp),
 
     ('firbuf', nb.complex64[:]),
-    ('fir_i', nb.uint64),
-    ('fir_phase', nb.uint64),
+    ('fir_i', nb.intp),
+    ('fir_phase', nb.intp),
 
     ('lo_table', nb.complex64[:]),
-    ('lo_phase', nb.uint64),
+    ('lo_phase', nb.intp),
 ])
 class RationalDdc:
     def __init__(self, taps, interpolation=1, decimation=1, freq_num=0, freq_den=1):
@@ -63,7 +61,7 @@ class RationalDdc:
         """
 
         # FIR parameters
-        self.taps = taps.astype(np.complex64)
+        self.taps = taps.astype(np.float32)
         self.interpolation = interpolation
         self.decimation = decimation
 
@@ -84,30 +82,57 @@ class RationalDdc:
         self.lo_phase = 0
 
     def execute(self, input):
+        firlen        = self.firlen
+        interpolation = self.interpolation
+        decimation    = self.decimation
+
+        lo_phase = self.lo_phase
+        fir_phase = self.fir_phase
+        fir_i = self.fir_i
+
         #output = np.zeros_like(input)
-        output = np.zeros(10000, dtype=np.complex64) # TODO: size of the array
+        output = np.zeros(1000, dtype=np.complex64) # TODO: size of the array
         outn = 0 # number of output samples produced
         for i in range(len(input)):
             # Mix input with local oscillator
-            mixed = input[i] * self.lo_table[self.lo_phase]
-            self.lo_phase = (self.lo_phase + 1) % len(self.lo_table)
+            mixed = input[i] * self.lo_table[lo_phase]
+
+            #lo_phase = (lo_phase + 1) % len(self.lo_table)
+            lo_phase += 1
+            if lo_phase >= len(self.lo_table):
+                lo_phase = 0
 
             # Store to buffer.
             # Fake circular buffering by storing the samples twice.
-            self.firbuf[self.fir_i] = self.firbuf[self.fir_i + self.firlen] = mixed
-            self.fir_i = (self.fir_i + 1) % self.firlen
+            self.firbuf[fir_i         ] = \
+            self.firbuf[fir_i + firlen] = mixed
 
-            self.fir_phase = self.fir_phase + self.interpolation
-            while self.fir_phase >= self.decimation:
-                self.fir_phase -= self.decimation
-                assert self.fir_phase >= 0
-                assert self.fir_phase < self.interpolation
-                output[outn] = np.dot(
-                    self.firbuf[self.fir_i : self.fir_i + self.firlen],
-                    self.taps[self.fir_phase : : self.interpolation]
-                )
+            #fir_i = (fir_i + 1) % firlen
+            fir_i += 1
+            if fir_i >= firlen:
+                fir_i = 0
+
+            fir_phase += interpolation
+            while fir_phase >= decimation:
+                fir_phase -= decimation
+                assert fir_phase >= 0
+                assert fir_phase < interpolation
+
+                t = self.taps[fir_phase : : interpolation]
+                fb = self.firbuf[fir_i : fir_i + firlen]
+
+                # This loop seems to be faster than calling np.dot
+                o = nb.complex64(0.0)
+                for j in range(firlen):
+                    o += t[j] * fb[j]
+
+                output[outn] = o
                 outn += 1
                 assert outn <= len(output)
+
+        self.lo_phase = lo_phase
+        self.fir_phase = fir_phase
+        self.fir_i = fir_i
         return output[0:outn]
 
 
