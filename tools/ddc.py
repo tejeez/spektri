@@ -18,6 +18,10 @@ def _sinewave(num, den):
     Length is chosen such that a continuous sine wave
     can be made by repeating the returned signal."""
 
+    # The code below fails for num=0, so handle that as a special case
+    if num == 0:
+        return nb.complex64([1.0])
+
     # "% den" is not absolutely necessary here, but wrapping the phase
     # using integers may avoid loss of floating point precision.
     phase = \
@@ -93,9 +97,9 @@ class RationalDdc:
         #output = np.zeros_like(input)
         output = np.zeros(1000, dtype=np.complex64) # TODO: size of the array
         outn = 0 # number of output samples produced
-        for i in range(len(input)):
+        for sample_in in input:
             # Mix input with local oscillator
-            mixed = input[i] * self.lo_table[lo_phase]
+            mixed = sample_in * self.lo_table[lo_phase]
 
             #lo_phase = (lo_phase + 1) % len(self.lo_table)
             lo_phase += 1
@@ -181,7 +185,7 @@ def test(fs_in = 1000, fs_out = 300, fc = 150):
 
     Read signal from stdin, mix and resample it and write the result to stdout.
     Test by running:
-    ../testsignal/target/release/testsignal complex 1000000 | ./ddc.py > ../data/ddc_test
+    ../testsignal/target/release/testsignal complex 1000000 | ./ddc.py t > ../data/ddc_test
 
     and check the result using, for example, Audacity.
     """
@@ -219,7 +223,7 @@ def benchmark(fs_in = 500000, fs_out = 16000, fc = 500, buflen = 4096, repeats =
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) >= 2 and sys.argv[1] == 'b':
-        benchmark()
-    else:
+    if len(sys.argv) >= 2 and sys.argv[1] == 't':
         test()
+    else:
+        benchmark()
