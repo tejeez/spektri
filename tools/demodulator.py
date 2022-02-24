@@ -17,8 +17,10 @@ class SsbAgc:
         self.pa = 0
 
     def execute(self, input):
-        attack = nb.float32(0.001)
+        attack = nb.float32(0.002)
         release = nb.float32(0.0002)
+        clipthreshold = nb.float32(0.9)
+        amplitude = nb.float32(0.25)
 
         pa = self.pa
         output = np.zeros_like(input)
@@ -26,26 +28,28 @@ class SsbAgc:
         for i in range(len(input)):
             # Input sample
             s = input[i]
-            # Power of the input sample
-            p = s.real ** 2 + s.imag ** 2
-            # Difference from the average power
+            # Amplitude of the input sample.
+            # Use amplitude instead of power (amplitude^2), so that short,
+            # high amplitude peaks won't affect the AGC that much.
+            p = np.abs(s)
+            # Difference from the average amplitude
             pd = p - pa
             if pd >= 0:
                 pa += pd * attack
             else:
                 pa += pd * release
 
-            # Normalize the amplitude based on average power
+            # Normalize the amplitude
             if pa > 0:
-                s *= nb.float32(0.3) / np.sqrt(pa)
+                s *= amplitude / pa
             else:
                 # this shouldn't happen often
                 s = 0
 
             # Some samples may still be above 1, so clip them
             p = s.real ** 2 + s.imag ** 2
-            if p > 1:
-                s *= nb.float32(1) / np.sqrt(p)
+            if p > clipthreshold:
+                s *= np.sqrt(clipthreshold / p)
 
             output[i] = s
 
@@ -59,7 +63,7 @@ class SsbDemodulator:
     Output is audio at a sample rate of 8 kHz."""
 
     # Channel filter taps for SSB audio at 16 kHz sample rate
-    chtaps = signal.firwin(96, 1350, window='hann', fs=16000)
+    chtaps = signal.firwin(64, 1400, window='hann', fs=16000)
 
     def __init__(self, fs_in, fc_in, fc_demod, mode='lsb', enable_agc=True):
         sideband = 1 if mode == 'usb' else -1
@@ -85,6 +89,37 @@ class SsbDemodulator:
         if self.agc is not None:
             s = self.agc.execute(s)
         return s.real
+
+
+class IqDemodulator:
+    """Simple I/Q downconversion
+    for making narrow-band I/Q recordings.
+
+    Output is I/Q at a sample rate of 100 Hz.
+    The sample could be configurable but for now it's fixed.
+    """
+
+    # Channel filter for last decimation stage
+    chtaps = signal.firwin(32, 40, window='hann', fs=200)
+
+    def __init__(self, fs_in, fc_in, fc_demod, mode='', enable_agc=True):
+        # Intermediate sample rates
+        fs1 = 20000
+        fs2 = 200
+
+        self.ddc = ddc.DesignDdc(fs_in, fs1, fc_demod - fc_in)
+
+        # Second decimation stage
+        self.ddc2 = ddc.DesignDdc(fs1, fs2, 0)
+
+        # Third decimation stage with channel filtering
+        self.chfilt = ddc.RationalDdc(self.chtaps, decimation=2)
+
+    def execute(self, input):
+        s = self.ddc.execute(input)
+        s = self.ddc2.execute(s)
+        s = self.chfilt.execute(s)
+        return s
 
 
 

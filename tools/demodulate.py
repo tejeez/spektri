@@ -7,12 +7,15 @@ import sys
 import numpy as np
 import zmq
 
-from demodulator import SsbDemodulator
+from demodulator import SsbDemodulator, IqDemodulator
 
 zctx = zmq.Context()
 
 
-def main(sub_topic = "500000 3625000  ", address = "ipc:///tmp/spektri.zmq"):
+def main(address='ipc:///tmp/spektri.zmq', fs_in=500000, fc_in=3625000, fc_demod=3699000, mode='lsb'):
+    # By current convention, subscription topic has the sample rate and center frequency as a string.
+    sub_topic = "%d %d  " % (fs_in, fc_in)
+
     s = zctx.socket(zmq.SUB)
 
     #s.setsockopt(zmq.RCVBUF, 100000)
@@ -22,22 +25,31 @@ def main(sub_topic = "500000 3625000  ", address = "ipc:///tmp/spektri.zmq"):
 
     s.connect(address)
 
-    demod = SsbDemodulator(500000, 3625000, 3699000, 'lsb')
-    #demod = SsbDemodulator(250000, 4625000, 4625000, 'usb')
+    if mode == 'iq':
+        demod = IqDemodulator(fs_in, fc_in, fc_demod, mode)
+    else:
+        demod = SsbDemodulator(fs_in, fc_in, fc_demod, mode)
+
+    # Pre-evaluate some methods as suggested at
+    # https://wiki.python.org/moin/PythonSpeed/PerformanceTips#Avoiding_dots...
+    # It did not really speed it up a lot though.
+    frombuf = np.frombuffer
+    demod_execute = demod.execute
+    write_output = sys.stdout.buffer.write
 
     while True:
         topic, msg = s.recv_multipart()
 
         if topic[0:1] == b"d":
             #seq, t_s, t_ns = struct.unpack("<QQI", msg[0:20])
-            signal = np.frombuffer(msg[24:], dtype=np.complex64)
-            d = demod.execute(signal)
-            sys.stdout.buffer.write(d.tobytes())
+            signal = frombuf(msg[24:], dtype=np.complex64)
+            d = demod_execute(signal)
+            write_output(d.tobytes())
 
 
 if __name__ == "__main__":
-    #import sys
-    if len(sys.argv) == 2:
-        main(address = sys.argv[1])
+    argv = sys.argv
+    if len(argv) == 6:
+        main(address = argv[1], fs_in = int(argv[2]), fc_in = int(argv[3]), fc_demod = int(argv[4]), mode = argv[5])
     else:
         main()
