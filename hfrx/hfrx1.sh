@@ -3,6 +3,9 @@
 
 FFTSIZE=16384
 SAMPLERATE=128000000
+# Sample rate requested from the receiver. It may differ from
+# the nominal sample rate above if frequency calibration is needed.
+SAMPLERATE_R=127997610
 
 # libsddc repository should be cloned into ../../libsddc
 # and built into ../../libsddc/build
@@ -27,20 +30,24 @@ TASKSET2=
 
 # Put sddc_stream in loop, so that it is restarted if it fails
 (while true; do
- ${TASKSET2} "${LIBSDDC}/build/src/sddc_stream" "${LIBSDDC}/firmware/SDDC_FX3.img" "${SAMPLERATE}"
+ ${TASKSET2} "${LIBSDDC}/build/src/sddc_stream" "${LIBSDDC}/firmware/SDDC_FX3.img" "${SAMPLERATE_R}"
 done) \
 | ${TASKSET2} pv \
 | ${TASKSET} ../spektri/target/release/spektri \
 "--inputformat=s16le" \
 "--fftsize=${FFTSIZE}" \
 "--spectrumformat=u8" \
-"--averages=50000" \
+"--averages=100000" \
 "--filters" \
+ "freq=-16;bins=64;topic=500000 125000  " \
+ "freq=208;bins=64;topic=500000 1875000  " \
  "freq=432;bins=64;topic=500000 3625000  " \
  "freq=576;bins=32;topic=250000 4625000  " \
  "freq=880;bins=64;topic=500000 7125000  " \
  "freq=1264;bins=64;topic=500000 10125000  " \
  "freq=1776;bins=64;topic=500000 14125000  " \
+ "freq=3568;bins=64;topic=500000 28125000  " \
+ "freq=6400;bins=64;topic=500000 50250000  " \
 
 
 kill $PID1
