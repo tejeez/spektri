@@ -84,7 +84,8 @@ class AmAgc:
 
             # Normalize the amplitude and remove DC offset
             if pa > 0:
-                s *= amplitude / pa - amplitude
+                s *= amplitude / pa
+                s -= amplitude
             else:
                 # this shouldn't happen often
                 s = 0
