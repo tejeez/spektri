@@ -7,7 +7,7 @@ import sys
 import numpy as np
 import zmq
 
-from demodulator import SsbDemodulator, IqDemodulator
+from demodulator import SsbDemodulator, AmDemodulator, IqDemodulator
 
 zctx = zmq.Context()
 
@@ -27,6 +27,8 @@ def main(address='ipc:///tmp/spektri.zmq', fs_in=500000, fc_in=3625000, fc_demod
 
     if mode == 'iq':
         demod = IqDemodulator(fs_in, fc_in, fc_demod, mode)
+    elif mode == 'am':
+        demod = AmDemodulator(fs_in, fc_in, fc_demod, mode)
     else:
         demod = SsbDemodulator(fs_in, fc_in, fc_demod, mode)
 

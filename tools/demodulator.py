@@ -57,6 +57,44 @@ class SsbAgc:
         return output
 
 
+@nb.jitclass([
+    ('pa', nb.float32),
+])
+class AmAgc:
+    """AGC for AM signals."""
+    def __init__(self):
+        self.pa = 0
+
+    def execute(self, input):
+        agcspeed = nb.float32(0.0002)
+        #clipthreshold = nb.float32(0.9)
+        amplitude = nb.float32(0.25)
+
+        pa = self.pa
+        output = np.zeros_like(input)
+
+        for i in range(len(input)):
+            # AM demodulated input sample
+            s = input[i]
+
+            # Difference from the average amplitude
+            pd = s - pa
+            # Average amplitude
+            pa += pd * agcspeed
+
+            # Normalize the amplitude and remove DC offset
+            if pa > 0:
+                s *= amplitude / pa - amplitude
+            else:
+                # this shouldn't happen often
+                s = 0
+
+            output[i] = s
+
+        self.pa = pa
+        return output
+
+
 class SsbDemodulator:
     """Demodulate SSB by Weaver method.
 
@@ -86,6 +124,35 @@ class SsbDemodulator:
         s = self.ddc.execute(input)
         s = self.chfilt.execute(s)
         s = self.mixer2.execute(s)
+        if self.agc is not None:
+            s = self.agc.execute(s)
+        return s.real
+
+
+class AmDemodulator:
+    """Demodulate AM.
+
+    Output is audio at a sample rate of 16 kHz."""
+
+    # Channel filter taps
+    chtaps = signal.firwin(64, 3000, window='hann', fs=16000)
+
+    def __init__(self, fs_in, fc_in, fc_demod, mode='am', enable_agc=True):
+        sideband = 1 if mode == 'usb' else -1
+        # Design the DDC to move center frequency to 0
+        # and resample the signal to 16 kHz
+        self.ddc = ddc.DesignDdc(fs_in, 16000, fc_demod - fc_in)
+
+        # Follow the resampler by one more filtering stage.
+        self.chfilt = ddc.RationalDdc(self.chtaps, decimation=1)
+
+        self.agc = AmAgc() if enable_agc else None
+
+    def execute(self, input):
+        s = self.ddc.execute(input)
+        s = self.chfilt.execute(s)
+        # AM demodulation
+        s = np.abs(s).astype(np.float32)
         if self.agc is not None:
             s = self.agc.execute(s)
         return s.real
