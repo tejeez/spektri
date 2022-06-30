@@ -281,8 +281,9 @@
 		function update_info(ev) {
 			let t = "";
 			if (has_time) {
-				let y = Math.round(ev.offsetY);
-				let fy = Math.floor(y * zoomy);
+				const y = Math.round(ev.offsetY);
+				const fy_offset = Math.round(slider3.value);
+				const fy = fy_offset + Math.floor(y * zoomy);
 				t_s  = read_le(view, record_bytes * fy + 0, 8);
 				t_ns = read_le(view, record_bytes * fy + 8, 4);
 				t = ", " + (new Date(1e3 * t_s + 1e-6 * t_ns).toUTCString());
