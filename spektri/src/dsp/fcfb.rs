@@ -9,9 +9,15 @@ use super::fftutil::*;
 use super::output::*;
 use super::Metadata;
 
+// ------------------------------------------------------
+// Filter bank, code to combine multiple filter instances
+// ------------------------------------------------------
+
 /* Bank of filters */
 pub struct Fcfb {
-    fft_size: usize,
+    fs_in:    f64,   // Input sample rate
+    fc_in:    f64,   // Input center frequency
+    fft_size: usize, // Input FFT size
     filters: Vec<Filter>,
 }
 
@@ -26,8 +32,14 @@ pub struct Filter {
 impl Fcfb {
     pub fn init(
         fft_size: usize,
+        fs_in:    f64,
+        fc_in:    f64,
     ) -> Self {
+        // hmm... fs_in, fc_in and fft_size are passed around in a lot of places,
+        // so would it make sense to put them all in one struct?
         Self {
+            fs_in:    fs_in,
+            fc_in:    fc_in,
             fft_size: fft_size,
             filters: Vec::new(),
         }
@@ -38,15 +50,20 @@ impl Fcfb {
         p: &FilterParams,
     )
     {
-        match FilterDsp::init(self.fft_size, &p) {
-            Ok(filter) => self.filters.push(Filter {
-                dsp: filter,
-                // TODO: calculate sufficient size for the output buffer
-                outbuf: vec![0; 100000],
-                outsize: 0,
-                output: Output::init(&p.output),
-            }),
-            Err(error) => eprintln!("Error creating filter: {:?}", error),
+        if let Some(bn) = freq_to_bins_exact(self.fft_size, self.fs_in, self.fc_in, p.fs_out, p.fc_out) {
+            match FilterDsp::init(self.fft_size, bn) {
+                Ok(filter) => self.filters.push(Filter {
+                    dsp: filter,
+                    // TODO: calculate sufficient size for the output buffer
+                    outbuf: vec![0; 100000],
+                    outsize: 0,
+                    output: Output::init(&p.output),
+                }),
+                Err(error) => eprintln!("Error creating filter: {:?}", error),
+            }
+        } else {
+            eprintln!("Invalid filter parameters");
+            // TODO: return errors
         }
     }
 
@@ -78,16 +95,28 @@ impl Fcfb {
         // (not actually used for anything at the moment)
         self.filters.retain(|f| !f.dsp.done);
     }
+
+    /// Calculate the nearest possible exact sample rate and center frequency
+    /// for a filter output.
+    ///
+    /// Return a tuple of (sample rate, center frequency).
+    /// These values will be accepted by add_filter.
+    /// If the values would be impossible, return None.
+    pub fn nearest_freq(
+        &self,
+        fs_out: f64,
+        fc_out: f64,
+    ) -> Option<(f64, f64)> {
+        let bn = freq_to_bins(self.fft_size, self.fs_in, self.fc_in, fs_out, fc_out)?;
+        Some(bins_to_freq(self.fft_size, self.fs_in, self.fc_in, bn))
+    }
 }
 
 
-/* Filter parameters */
-pub struct FilterParams {
-    pub freq: isize,  // Center frequency
-    pub ifft_size: usize,
-    //pub bw: isize, // Bandwidth
-    pub output: OutputParams,
-}
+
+// ----------------------------------------------
+// Signal processing for a single filter instance
+// ----------------------------------------------
 
 /* DSP state of a filter.
  * This struct does not contain any I/O related things. */
@@ -103,7 +132,7 @@ pub struct FilterDsp {
 impl FilterDsp {
     pub fn init(
         fft_size: usize,
-        p: &FilterParams,
+        bn:       BinNumbers,
     ) -> Result<Self, Box<dyn Error>>
     // TODO: Box<dyn Error> is not used here anymore, so use something else
     {
@@ -112,9 +141,9 @@ impl FilterDsp {
         Ok(Self {
             done: false,
             fft_size: fft_size,
-            freq: p.freq,
-            weights: raised_cosine_weights(p.ifft_size),
-            ifft: planner.plan_fft_inverse(p.ifft_size),
+            freq: bn.first,
+            weights: raised_cosine_weights(bn.bins),
+            ifft: planner.plan_fft_inverse(bn.bins),
         })
     }
 
@@ -153,10 +182,130 @@ impl FilterDsp {
 }
 
 
+
+// -------------
+// Filter design
+// -------------
+
 fn raised_cosine_weights(size: usize) -> Vec<f32> {
     use std::f32::consts::PI;
     let f = (2.0 * PI) / size as f32;
     (0..size).map(|i| {
         0.5 - 0.5 * ((i as f32) * f).cos()
     }).collect()
+}
+
+/// Filter design and configuration parameters
+pub struct FilterParams {
+    pub fs_out: f64, // Output sample rate
+    pub fc_out: f64, // Output center frequency
+    //pub bw: isize, // Bandwidth
+    pub output: OutputParams,
+}
+
+#[derive(Copy, Clone)]
+pub struct BinNumbers {
+    pub bins:  usize, // IFFT size, number of bins to use
+    pub first: isize, // Number of the first bin
+}
+
+/// Convert sample rate and center frequency to bin numbers for a filter.
+///
+/// Values will be rounded to the nearest possible one.
+/// Return none if the values would be impossible.
+///
+/// To get the exact frequency values, use bins_to_freq
+/// to convert the numbers back to frequencies.
+pub fn freq_to_bins(
+    fft_size: usize, // Input FFT size
+    fs_in:    f64,   // Input sample rate
+    fc_in:    f64,   // Input center frequency
+    fs_out:   f64,   // Filtered sample rate
+    fc_out:   f64,   // Filtered center frequency
+) -> Option<BinNumbers> {
+    // IFFT size must be a multiple of this.
+    // For 25% overlap, it's 4. For 50% overlap (TODO), it would be 2.
+    let multiple: isize = 4;
+    fn nearest_multiple(value: f64, multiple: isize) -> isize {
+        ((value / (multiple as f64)).round() * (multiple as f64)) as isize
+    }
+
+    let bin_spacing = fs_in / (fft_size as f64);
+
+    // IFFT size
+    let bins = nearest_multiple(fs_out / bin_spacing, multiple);
+    // Center bin number
+    let center = nearest_multiple((fc_out - fc_in) / bin_spacing, multiple);
+
+    if bins > 0 { // TODO: other validity checks?
+        Some(BinNumbers {
+            bins:  bins as usize,
+            first: center - bins/2
+        })
+    } else {
+        None
+    }
+}
+
+/// Convert bin numbers to the resulting sample rate and center frequency.
+///
+/// Return a tuple of the output sample rate and output center frequency.
+pub fn bins_to_freq(
+    fft_size: usize, // Input FFT size
+    fs_in:    f64,   // Input sample rate
+    fc_in:    f64,   // Input center frequency
+    bn:       BinNumbers,
+) -> (f64, f64) {
+    let bin_spacing = fs_in / (fft_size as f64);
+    (
+        // Output sample rate
+        bin_spacing * (bn.bins as f64),
+        // Output center frequency
+        fc_in + bin_spacing * ((bn.first + (bn.bins/2) as isize) as f64)
+    )
+}
+
+
+/// Convert sample rate and center frequency to bin numbers for a filter.
+/// Only accept frequency values that can be done exactly.
+/// Return none if the values would be impossible.
+pub fn freq_to_bins_exact(
+    fft_size: usize, // Input FFT size
+    fs_in:    f64,   // Input sample rate
+    fc_in:    f64,   // Input center frequency
+    fs_out:   f64,   // Filtered sample rate
+    fc_out:   f64,   // Filtered center frequency
+) -> Option<BinNumbers> {
+    let bn = freq_to_bins(fft_size, fs_in, fc_in, fs_out, fc_out)?;
+    if bins_to_freq(fft_size, fs_in, fc_in, bn) == (fs_out, fc_out) {
+        Some(bn)
+    } else {
+        None
+    }
+}
+
+
+#[test]
+fn test_freq_to_bins() {
+    fn test(
+        fft_size: usize,
+        fs_in:    f64,
+        fc_in:    f64,
+        fs_out:   f64,
+        fc_out:   f64,
+        bins:     usize, // Expected result
+        first:    isize, // Expected result
+        should_be_exact: bool,
+    ) {
+        let bn = freq_to_bins(fft_size, fs_in, fc_in, fs_out, fc_out).unwrap();
+        assert!(bn.bins == bins);
+        assert!(bn.first == first);
+        let (fs_out_exact, fc_out_exact) = bins_to_freq(fft_size, fs_in, fc_in, bn);
+        if should_be_exact {
+            assert!(fs_out_exact == fs_out);
+            assert!(fc_out_exact == fc_out);
+        }
+    }
+    // Test with some values that were used before
+    test(16384, 128.0e6, 0.0, 500000.0, 50.250e6, 64, 6400, true);
 }

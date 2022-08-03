@@ -20,6 +20,8 @@ pub mod output;
 // Parameters for signal processing
 pub struct DspParams {
     pub complex: bool, // Type of input signal: true for I/Q, false for real
+    pub fs_in:    f64, // Input sample rate
+    pub fc_in:    f64, // Input center frequency
     pub fft_size: usize,
     pub scaling: f32, // Scaling of input values
     pub ffts_per_buf: usize,
@@ -42,7 +44,9 @@ pub struct Metadata {
 }
 
 pub struct DspState {
-    fft_size: usize,
+    //fs_in:        f64,
+    //fc_in:        f64,
+    fft_size:     usize,
     ffts_per_buf: usize,
     fft_interval: usize,
 
@@ -79,14 +83,16 @@ impl DspState {
         let result_bins = if params.complex { params.fft_size } else { params.fft_size / 2 + 1 };
 
         (DspState {
-            fft_size: params.fft_size,
+            //fs_in:        params.fs_in,
+            //fc_in:        params.fc_in,
+            fft_size:     params.fft_size,
             ffts_per_buf: params.ffts_per_buf,
             fft_interval: fft_interval,
 
             mfft: MultiFft::init(params.fft_size),
             accu: SpectrumAccumulator::init(params.fft_size, params.complex, params.spectrum_averages, params.spectrum_format),
             fb: {
-                let mut fb = Fcfb::init(params.fft_size);
+                let mut fb = Fcfb::init(params.fft_size, params.fs_in, params.fc_in);
                 for f in params.filters.iter() {
                     fb.add_filter(f);
                 }

@@ -35,19 +35,21 @@ done) \
 | ${TASKSET2} pv \
 | ${TASKSET} ../spektri/target/release/spektri \
 "--inputformat=s16le" \
+"--samplerate=${SAMPLERATE}" \
+"--centerfreq=0" \
 "--fftsize=${FFTSIZE}" \
 "--spectrumformat=u8" \
 "--averages=100000" \
 "--filters" \
- "freq=-16;bins=64;topic=500000 125000  " \
- "freq=208;bins=64;topic=500000 1875000  " \
- "freq=432;bins=64;topic=500000 3625000  " \
- "freq=576;bins=32;topic=250000 4625000  " \
- "freq=880;bins=64;topic=500000 7125000  " \
- "freq=1264;bins=64;topic=500000 10125000  " \
- "freq=1776;bins=64;topic=500000 14125000  " \
- "freq=3568;bins=64;topic=500000 28125000  " \
- "freq=6400;bins=64;topic=500000 50250000  " \
+ "fs=500000:fc=125000:topic=500000 125000  " \
+ "fs=500000:fc=1875000:topic=500000 1875000  " \
+ "fs=500000:fc=3625000:topic=500000 3625000  " \
+ "fs=250000:fc=4625000:topic=250000 4625000  " \
+ "fs=500000:fc=7125000:topic=500000 7125000  " \
+ "fs=500000:fc=10125000:topic=500000 10125000  " \
+ "fs=500000:fc=14125000:topic=500000 14125000  " \
+ "fs=500000:fc=28125000:topic=500000 28125000  " \
+ "fs=500000:fc=50250000:topic=500000 50250000  " \
 
 
 kill $PID1

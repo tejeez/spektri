@@ -12,17 +12,19 @@ mod inputformats;
 use inputformats::*;
 
 
-fn parse_configuration() -> (dsp::DspParams, InputFormat, String) {
+fn parse_configuration() -> (dsp::DspParams, InputFormat, Vec<String>) {
     use clap::{App};
     let matches = App::new("spektri")
         .args_from_usage("
-            -s, --fftsize=[SIZE]             'FFT size'
-            -b, --fftbuf=[NUMBER]            'Number of FFTs in each input buffer (adjust to optimize performance)'
+            -s, --samplerate=[HZ]            'Input sample rate'
+            -f, --centerfreq=[HZ]            'Input center frequency, i.e. RF frequency at 0 Hz input frequency'
+            -n, --fftsize=[SIZE]             'FFT size'
+                --fftbuf=[NUMBER]            'Number of FFTs in each input buffer (adjust to optimize performance)'
             -a, --averages=[NUMBER]          'Number of FFTs averaged for spectrum'
-            -f, --inputformat=[FORMAT]       'Input signal format'
-            -F, --spectrumformat=[FORMAT]    'Spectrum output format'
-            -o, --filters=[PARAMETERS]...    'Filter parameters'
-                --zmqbind=[ADDRESS]          'ZeroMQ binding address'
+            -I, --inputformat=[FORMAT]       'Input signal format'
+                --spectrumformat=[FORMAT]    'Spectrum output format'
+                --filters=[PARAMETERS]...    'Filter parameters'
+                --zmqbind=[ADDRESS]...       'ZeroMQ binding addresses'
             ")
         .get_matches();
 
@@ -31,6 +33,12 @@ fn parse_configuration() -> (dsp::DspParams, InputFormat, String) {
     (dsp::DspParams {
         complex:
             is_input_format_complex(inputformat),
+        fs_in:
+            value_t!(matches, "samplerate", f64)
+            .unwrap_or_else(|e| e.exit()),
+        fc_in:
+            value_t!(matches, "centerfreq", f64)
+            .unwrap_or(0.0),
         fft_size:
             value_t!(matches, "fftsize", usize)
             .unwrap_or(16384),
@@ -53,7 +61,8 @@ fn parse_configuration() -> (dsp::DspParams, InputFormat, String) {
             .collect::<Vec<dsp::FilterParams>>(),
     },
     inputformat,
-    value_t!(matches, "zmqbind", String).unwrap_or("ipc:///tmp/spektri.zmq".into())
+    values_t!(matches, "zmqbind", String)
+    .unwrap_or(vec!["ipc:///tmp/spektri.zmq".into()])
     )
 }
 
@@ -63,9 +72,9 @@ fn parse_filter_params(s: &str) -> dsp::FilterParams {
 
     // , might be a nicer separator for parameters, but clap with
     // these settings doesn't seem to like arguments with commas,
-    // so let's use ; instead.
+    // so let's use : instead.
     let m: HashMap<_, _> =
-        s.split(";")
+        s.split(":")
         .map(|x| {
             x.split_once('=').unwrap() // TODO: handle errors
         })
@@ -73,8 +82,8 @@ fn parse_filter_params(s: &str) -> dsp::FilterParams {
 
     dsp::FilterParams {
         // TODO: handle errors
-        freq: m.get("freq").unwrap().parse().unwrap(),
-        ifft_size: m.get("bins").unwrap().parse().unwrap(),
+        fs_out: m.get("fs").unwrap().parse().unwrap(),
+        fc_out: m.get("fc").unwrap().parse().unwrap(),
         output: dsp::output::OutputParams {
             filename: if let Some(v) = m.get("file")  { Some(v.to_string()) } else { None },
             topic:    if let Some(v) = m.get("topic") { Some(v.to_string()) } else { None },
@@ -89,7 +98,9 @@ fn main() -> std::io::Result<()> {
     let zctx = zmq::Context::new();
     let sock = zctx.socket(zmq::PUB).unwrap();
     // TODO: set SNDBUF and HWM sizes
-    sock.bind(&zmqbind).unwrap();
+    for address in zmqbind.iter() {
+        sock.bind(&address).unwrap();
+    }
 
     if is_input_format_complex(inputformat) {
         mainloop_complex(dspparams, inputformat, sock)

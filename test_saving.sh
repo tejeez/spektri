@@ -16,6 +16,6 @@ tools/save_to_files.py spectrum "data/test_%Y%m%d_%H%M%S_${SAMPLERATE}_${FFTSIZE
 
 testsignal/target/release/testsignal real 200000000 \
 | pv -L $(expr $SAMPLERATE \* 2) \
-| (time spektri/target/release/spektri --inputformat=s16le --fftsize=$FFTSIZE --averages=1000)
+| (time spektri/target/release/spektri --inputformat=s16le  --samplerate=$SAMPLERATE --fftsize=$FFTSIZE --averages=1000)
 
 kill $PID1
