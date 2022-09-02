@@ -26,6 +26,24 @@ The file format and format of the ZeroMQ messages are not really stable yet.
 ZeroMQ may not even be the best choice for the interface, and it was mainly
 chosen because I found it easy to use and was already familiar with it.
 
+### ZeroMQ message format
+
+Messages consists of two parts. The first part is used as a subscription topic
+and also encodes metadata that stays constant while the program is running.
+For output signals from the filter bank, the first part contains
+the sample rate and center frequency of the filtered signal.
+The second part contains the signal and metadata that may change for each
+block, such a timestamp of the block.
+
+This leads to a convenient interface to the filter bank:
+to obtain a filtered signal of given sample rate and center frequency,
+subscribe to the topic correponding to these parameters.
+
+Currently, filters have to be configured on the command line when Spektri
+is started. The plan is to use an XPUB socket to monitor for subscriptions
+and automatically add a filter to the filter bank whenever a new subscription
+is added. This is not implemented yet.
+
 ## Contents of the repository
 
 * [spektri/](spektri/): The spectrum analysis and filter bank program.

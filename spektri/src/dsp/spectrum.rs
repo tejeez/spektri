@@ -22,11 +22,11 @@
  */
 
 use rustfft::num_complex::Complex;
-use std::io::Write;
 use zmq;
 use super::fftutil::*;
 use super::Metadata;
 use super::output::*;
+use super::data::*;
 
 arg_enum! { // needed for command line parsing
     #[derive(Debug, Copy, Clone)]
@@ -48,17 +48,21 @@ impl SpectrumAccumulator {
         complex: bool, // is the input to FFT complex
         averages: u32, // Number of FFTs averaged
         outfmt: SpectrumFormat, // Output format for spectrum data
-    ) -> SpectrumAccumulator {
-        SpectrumAccumulator {
+    ) -> Self {
+        Self {
             acc: vec![0.0; if complex { fft_size } else { fft_size/2+1 }],
             accn: 0,
             fft_size: fft_size,
             averages: averages,
             outfmt: outfmt,
-            output: Output::init(&OutputParams {
-                filename: None,
-                topic: Some("spectrum".to_string())
-            }),
+            output: Output::init(
+                &OutputParams {
+                    filename: None, // TODO
+                },
+                &serialize_spectrum_topic(&SpectrumInfo {
+                    f0: 0.0,
+                    fd: 0.0, // TODO
+                })),
         }
     }
 

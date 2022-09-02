@@ -13,8 +13,11 @@ mod fcfb;
 use fcfb::Fcfb;
 pub use fcfb::FilterParams;
 
+pub mod data;
 pub mod fftutil;
 pub mod output;
+
+pub use data::Metadata;
 
 
 // Parameters for signal processing
@@ -36,11 +39,6 @@ pub struct InputBufferSize {
     pub new:     usize, // Number of new samples in each buffer
     pub overlap: usize, // Overlampping samples from previous buffer
     pub total:   usize, // Total size of the buffer (new+overlap)
-}
-
-// metadata for buffers of samples
-pub struct Metadata {
-    pub systemtime: std::time::SystemTime,
 }
 
 pub struct DspState {

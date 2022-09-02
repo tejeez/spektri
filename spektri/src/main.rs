@@ -86,7 +86,6 @@ fn parse_filter_params(s: &str) -> dsp::FilterParams {
         fc_out: m.get("fc").unwrap().parse().unwrap(),
         output: dsp::output::OutputParams {
             filename: if let Some(v) = m.get("file")  { Some(v.to_string()) } else { None },
-            topic:    if let Some(v) = m.get("topic") { Some(v.to_string()) } else { None },
         },
     }
 }

@@ -5,6 +5,7 @@ use rayon::prelude::*;
 use rustfft::{FftPlanner, num_complex::Complex};
 use zmq;
 
+use super::data::*;
 use super::fftutil::*;
 use super::output::*;
 use super::Metadata;
@@ -57,7 +58,10 @@ impl Fcfb {
                     // TODO: calculate sufficient size for the output buffer
                     outbuf: vec![0; 100000],
                     outsize: 0,
-                    output: Output::init(&p.output),
+                    output: Output::init(&p.output, &serialize_signal_topic(&SignalInfo {
+                        fs: p.fs_out,
+                        fc: p.fc_out,
+                    })),
                 }),
                 Err(error) => eprintln!("Error creating filter: {:?}", error),
             }
@@ -199,7 +203,6 @@ fn raised_cosine_weights(size: usize) -> Vec<f32> {
 pub struct FilterParams {
     pub fs_out: f64, // Output sample rate
     pub fc_out: f64, // Output center frequency
-    //pub bw: isize, // Bandwidth
     pub output: OutputParams,
 }
 
