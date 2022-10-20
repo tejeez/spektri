@@ -8,30 +8,35 @@ import zmq
 
 zctx = zmq.Context()
 
-def main(sub_topic = "test", address = "ipc:///tmp/spektri.zmq", filename_fmt = "../data/test_%Y%m%d_%H%M%S", file_interval = 60):
+def main(
+    # Subscribe to any uint8 spectrum data by default
+    sub_topic = bytes((2,0x61)),
+    address = "ipc:///tmp/spektri.zmq",
+    filename_fmt = "../data/test_%Y%m%d_%H%M%S",
+    file_interval = 60
+):
     s = zctx.socket(zmq.SUB)
 
     #s.setsockopt(zmq.RCVBUF, 100000)
     #s.set_hwm(10)
 
-    s.subscribe("m" + sub_topic)
-    s.subscribe("d" + sub_topic)
-
+    s.subscribe(sub_topic)
     s.connect(address)
 
     output_file = None
 
-    metadata = b""
+    prev_topic = None
     new_file = True
     prev_t_s = 0
     while True:
         topic, msg = s.recv_multipart()
-        # Start a new file if metadata changes
-        if topic[0:1] == b"m" and msg != metadata:
-            metadata = msg
+        # Start a new file if topic changes
+        if topic != prev_topic:
+            print("Topic:", topic.hex())
+            prev_topic = topic
             new_file = True
 
-        if topic[0:1] == b"d":
+        if True:
             # Write data to a file
             #output_file.write(msg)
             # Write only the signal without the timestamps etc
@@ -59,6 +64,8 @@ def main(sub_topic = "test", address = "ipc:///tmp/spektri.zmq", filename_fmt = 
 if __name__ == "__main__":
     import sys
     if len(sys.argv) == 4:
-        main(sub_topic = sys.argv[1], filename_fmt = sys.argv[2], file_interval = int(sys.argv[3]))
+        # TODO: use argv[1] to select which data to save.
+        # Now it only uses the default value.
+        main(filename_fmt = sys.argv[2], file_interval = int(sys.argv[3]))
     else:
         main()

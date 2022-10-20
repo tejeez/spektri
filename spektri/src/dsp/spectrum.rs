@@ -57,7 +57,8 @@ impl SpectrumAccumulator {
             outfmt: outfmt,
             output: Output::init(
                 &OutputParams {
-                    filename: None, // TODO
+                    // Temporary hack for compatibility with old test scripts:
+                    filename: Some("/dev/stdout".to_string()),
                 },
                 &serialize_spectrum_topic(&SpectrumInfo {
                     f0: 0.0,

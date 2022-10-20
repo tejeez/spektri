@@ -1,11 +1,19 @@
 # Spektri
 
-Spektri is an FFT-based spectrum analyzer program
-that can make use of parallel computation on multi-core CPUs.
+Spektri takes a digitized signal from a software defined radio receiver,
+downconverts it into multiple channels of a lower sample rate and sends
+these downconverted signals to other programs for further processing.
+This lets you use a single SDR for multiple applications simultaneously.
 
-The same FFT results are also used for digital down-conversion
-of multiple narrow-band channels using a
-[fast-convolution filter bank](https://ieeexplore.ieee.org/document/6834830).
+Spektri uses the
+[fast-convolution filter bank](https://ieeexplore.ieee.org/document/6834830)
+algorithm to efficiently process high input sample rates
+and a large number of output channels.
+The algorithm is parallelized to make use of multi-core CPUs.
+
+Spektri also estimates spectrum of the input signal.
+The same FFT calculations are used both for spectrum analysis
+and for the fast convolution filter bank.
 
 At the moment, most features are undocumented and unfinished.
 Everything is still under development and anything may change at any point.
@@ -53,3 +61,4 @@ is added. This is not implemented yet.
 * [testsignal/](testsignal/): Generates a frequency sweep for testing.
 * [prototyping/](prototyping/): Scripts used to test some algorithms before
   implementing them as a part of Spektri.
+* [test/](test/): Scripts used to test Spektri and associated tools.
