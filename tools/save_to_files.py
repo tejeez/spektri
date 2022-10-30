@@ -6,11 +6,13 @@ import time
 
 import zmq
 
-zctx = zmq.Context()
+import spektri
+
+zctx = spektri.zctx
 
 def main(
     # Subscribe to any uint8 spectrum data by default
-    sub_topic = bytes((2,0x61)),
+    sub_topic = spektri.spectrum_topic(),
     address = "ipc:///tmp/spektri.zmq",
     filename_fmt = "../data/test_%Y%m%d_%H%M%S",
     file_interval = 60

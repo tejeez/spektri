@@ -17,5 +17,5 @@ F="--filters fs=32000:fc=0 fs=32000:fc=32000 fs=8000:fc=-8000:file=data/test3.sp
 
 ./zmq_rx.py 32000 0 data/test_32000_0.cf32 & PID1=$!
 ./zmq_rx.py 32000 32000 data/test_32000_32000.cf32 & PID2=$!
-time testsignal complex 100000000 | (time spektri --inputformat=cs16le $P $F)
+(time testsignal complex 100000000) | (time spektri --inputformat=cs16le $P $F) >/dev/null
 kill $PID1 $PID2

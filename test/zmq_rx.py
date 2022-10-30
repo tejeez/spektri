@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """Test receiving data from Spektri by ZeroMQ."""
 
+# TODO: Get rid of this script and turn it into a proper tool for saving
+# filter bank output. It could be a part of save_to_files.py too.
+
+import sys
 import struct
 
 import zmq
 
-zctx = zmq.Context()
+# Use some functions from ../tools/spektri.py
+sys.path.insert(0, "../tools")
+import spektri
 
-def serialize_signal_topic(fs, fc):
-    return bytes((2, 0x50, 0,0,0,0,0,0)) + struct.pack("<dd", fs, fc)
+zctx = spektri.zctx
 
 def main(fs = 32000, fc = 0, filename = "data/test", address = "ipc:///tmp/spektri.zmq"):
     s = zctx.socket(zmq.SUB)
@@ -16,7 +21,7 @@ def main(fs = 32000, fc = 0, filename = "data/test", address = "ipc:///tmp/spekt
     #s.setsockopt(zmq.RCVBUF, 100000)
     #s.set_hwm(10)
 
-    sub_topic = serialize_signal_topic(fs, fc)
+    sub_topic = spektri.signal_topic(fs, fc)
     s.subscribe(sub_topic)
 
     s.connect(address)

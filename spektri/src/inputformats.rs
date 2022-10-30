@@ -5,24 +5,11 @@
 use byte::*;
 use rustfft::num_complex::Complex;
 
+// I'm not sure if reusing the DataFormat enum here is a good idea,
+// since the set of supported output formats might end up being different
+// from the supported set of input formats.
+pub use crate::dsp::data::DataFormat as InputFormat;
 
-arg_enum! { // needed for command line parsing
-    #[derive(Debug, Copy, Clone)]
-    pub enum InputFormat {
-        U8,      // real unsigned 8-bit
-        S8,      // real signed 8-bit
-        S16le,   // real signed 16-bit, little endian
-        S16be,   // real signed 16-bit, big endian
-        F32le,   // real float 32-bit, little endian
-        F32be,   // real float 32-bit, big endian
-        Cu8,     // complex unsigned 8-bit
-        Cs8,     // complex signed 8-bit
-        Cs16le,  // complex signed 16-bit, little endian
-        Cs16be,  // complex signed 16-bit, big endian
-        Cf32le,  // complex float 32-bit, little endian
-        Cf32be,  // complex float 32-bit, big endian
-    }
-}
 
 pub fn bytes_per_input_sample(fmt: InputFormat) -> usize {
     match fmt {
