@@ -1,4 +1,4 @@
-/* Fast-convolution filter bank */
+//! Fast-convolution filter bank
 
 use std::error::Error;
 use rayon::prelude::*;
@@ -14,7 +14,7 @@ use super::Metadata;
 // Filter bank, code to combine multiple filter instances
 // ------------------------------------------------------
 
-/* Bank of filters */
+/// Bank of filters
 pub struct Fcfb {
     fs_in:    f64,   // Input sample rate
     fc_in:    f64,   // Input center frequency
@@ -22,7 +22,7 @@ pub struct Fcfb {
     filters: Vec<Filter>,
 }
 
-/* One filter */
+/// One filter
 pub struct Filter {
     dsp: FilterDsp,
     outbuf: Vec<u8>,
@@ -122,8 +122,9 @@ impl Fcfb {
 // Signal processing for a single filter instance
 // ----------------------------------------------
 
-/* DSP state of a filter.
- * This struct does not contain any I/O related things. */
+/// DSP state of a filter.
+///
+/// This struct does not contain any I/O related things. */
 pub struct FilterDsp {
     // TODO: is done useful anymore?
     done: bool,

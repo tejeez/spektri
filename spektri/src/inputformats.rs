@@ -1,6 +1,4 @@
-/*
- * Input formats and conversion functions
- */
+//! Input formats and conversion functions
 
 use byte::*;
 use rustfft::num_complex::Complex;
@@ -45,7 +43,7 @@ pub fn is_input_format_complex(fmt: InputFormat) -> bool {
     }
 }
 
-/* Scaling factors for each input format to get numbers between -1 and 1 */
+/// Scaling factors for each input format to get numbers between -1 and 1
 pub fn input_format_scaling(fmt: InputFormat) -> f32 {
     match fmt {
         InputFormat::U8     |

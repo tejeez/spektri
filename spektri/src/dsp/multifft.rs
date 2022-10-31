@@ -1,4 +1,4 @@
-// Calculation of multiple FFTs in parallel
+//! Calculation of multiple FFTs in parallel
 
 use rustfft::{FftPlanner, num_complex::Complex};
 use rayon::prelude::*;
@@ -7,7 +7,7 @@ pub struct MultiFft {
     fft: std::sync::Arc<dyn rustfft::Fft<f32>>, // RustFFT plan
 }
 
-// Apply a real-valued window function to a complex signal
+/// Apply a real-valued window function to a complex signal.
 fn apply_window(
     window: &[f32],
     input: &[Complex<f32>],
@@ -29,8 +29,8 @@ impl MultiFft {
         }
     }
 
-    // Calculate multiple FFTs with a window function
-    // for complex input signal
+    /// Calculate multiple FFTs with a window function
+    /// for complex input signal.
     pub fn process_complex(
         &self,
         window: &[f32],
@@ -46,8 +46,8 @@ impl MultiFft {
         });
     }
 
-    // Calculate multiple FFTs with a window function
-    // for real input signal
+    /// Calculate multiple FFTs with a window function
+    /// for real input signal.
     pub fn process_real(
         &self,
         window: &[f32],
@@ -61,7 +61,7 @@ impl MultiFft {
         });
     }
 
-    // Calculate two real-input-valued FFTs in one complex FFT.
+    /// Calculate two real-input-valued FFTs in one complex FFT.
     fn two_real_ffts(
         &self,
         window: &[f32],
@@ -117,9 +117,9 @@ fn test_two_real_ffts() {
         &mut out0, &mut out1
     );
 
-    // Check the difference from expected values.
-    // Allow for some rounding errors, which may result both from the computation
-    // and from the 6-decimal accuracy of the copy-pasted numbers.
+    /// Check the difference from expected values.
+    /// Allow for some rounding errors, which may result both from the computation
+    /// and from the 6-decimal accuracy of the copy-pasted numbers.
     fn check_difference(result: &[Complex<f32>], expected: &[Complex<f32>], max_error: f32) {
         result.iter().zip(expected.iter()).for_each(|(r, e)| {
             eprintln!{"{0} {1} {2} {3}", r.re, r.im, e.re, e.im};

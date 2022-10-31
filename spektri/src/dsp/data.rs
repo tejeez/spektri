@@ -1,5 +1,5 @@
-/// This file defines various data types used in several parts of the code.
-/// There are also functions to encode them for files or ZeroMQ messages.
+//! This file defines various data types used in several parts of the code.
+//! There are also functions to encode them for files or ZeroMQ messages.
 
 use byte;
 use byte::{BytesExt, LE};
@@ -13,21 +13,21 @@ pub struct Metadata {
 
 /// Information about signal data
 pub struct SignalInfo {
-	pub fs: f64, // Sample rate
-	pub fc: f64, // Center frequency
+    pub fs: f64, // Sample rate
+    pub fc: f64, // Center frequency
 }
 
 
 /// Information about spectrum data
 pub struct SpectrumInfo {
-	pub fd: f64, // Spacing of bins in frequency
-	pub f0: f64, // Frequency of the first bin
+    pub fd: f64, // Spacing of bins in frequency
+    pub f0: f64, // Frequency of the first bin
 }
 
 pub enum MessageType {
-	Status   = 0x20,
-	Waveform = 0x40,
-	Spectrum = 0x60,
+    Status   = 0x20,
+    Waveform = 0x40,
+    Spectrum = 0x60,
 }
 
 // Data format is encoded as:
@@ -81,64 +81,64 @@ const PROTOCOL_VERSION: u8 = 2;
 /// The serialized metadata is placed in the beginning of each record
 /// of signal or spectrum data.
 pub fn serialize_metadata(
-	buf: &mut [u8],
-	offset: &mut usize,
-	metadata: &Metadata,
-	seq: u64, // Sequence number of samples
+    buf: &mut [u8],
+    offset: &mut usize,
+    metadata: &Metadata,
+    seq: u64, // Sequence number of samples
 ) -> byte::Result<()> {
-	use std::time::UNIX_EPOCH;
+    use std::time::UNIX_EPOCH;
 
-	let (secs, nanosecs) = match metadata.systemtime.duration_since(UNIX_EPOCH) {
-		Ok(d) => { (d.as_secs(), d.subsec_nanos()) },
-		// If duration_since fails, let's just write zeros there.
-		// Maybe we don't really need to handle it in any special way.
-		Err(_) => { (0,0) },
-	};
+    let (secs, nanosecs) = match metadata.systemtime.duration_since(UNIX_EPOCH) {
+        Ok(d) => { (d.as_secs(), d.subsec_nanos()) },
+        // If duration_since fails, let's just write zeros there.
+        // Maybe we don't really need to handle it in any special way.
+        Err(_) => { (0,0) },
+    };
 
-	buf.write_with(offset, seq, LE)?;
-	buf.write_with(offset, secs, LE)?;
-	buf.write_with(offset, nanosecs, LE)?;
-	// Reserved
-	buf.write_with(offset, 0u32, LE)?;
+    buf.write_with(offset, seq, LE)?;
+    buf.write_with(offset, secs, LE)?;
+    buf.write_with(offset, nanosecs, LE)?;
+    // Reserved
+    buf.write_with(offset, 0u32, LE)?;
 
-	Ok(())
+    Ok(())
 }
 
 
 /// Serialize topic for signal data.
 /// The topic encodes sample rate and center frequency of the signal.
 pub fn serialize_signal_topic(
-	info:   &SignalInfo,
+    info:   &SignalInfo,
 ) -> [u8; 24] {
-	let mut buf = [0u8; 24];
+    let mut buf = [0u8; 24];
 
-	buf[0] = PROTOCOL_VERSION;
-	buf[1] = MessageType::Waveform as u8;
-	buf[2] = DataFormat::Cf32le as u8;
+    buf[0] = PROTOCOL_VERSION;
+    buf[1] = MessageType::Waveform as u8;
+    buf[2] = DataFormat::Cf32le as u8;
 
-	let mut offset = 8;
-	// These should always fit into the buffer, so unwrap only panics
-	// if there's a bug in this function.
-	buf.write_with(&mut offset, info.fs, LE).unwrap();
-	buf.write_with(&mut offset, info.fc, LE).unwrap();
+    let mut offset = 8;
+    // These should always fit into the buffer, so unwrap only panics
+    // if there's a bug in this function.
+    buf.write_with(&mut offset, info.fs, LE).unwrap();
+    buf.write_with(&mut offset, info.fc, LE).unwrap();
 
-	buf
+    buf
 }
 
 
 /// Serialize topic for spectrum data.
 pub fn serialize_spectrum_topic(
-	info:   &SpectrumInfo,
+    info:   &SpectrumInfo,
 ) -> [u8; 24] {
-	let mut buf = [0u8; 24];
+    let mut buf = [0u8; 24];
 
-	buf[0] = PROTOCOL_VERSION;
-	buf[1] = MessageType::Spectrum as u8;
-	buf[2] = DataFormat::Cu8 as u8;
+    buf[0] = PROTOCOL_VERSION;
+    buf[1] = MessageType::Spectrum as u8;
+    buf[2] = DataFormat::Cu8 as u8;
 
-	let mut offset = 8;
-	buf.write_with(&mut offset, info.fd, LE).unwrap();
-	buf.write_with(&mut offset, info.f0, LE).unwrap();
+    let mut offset = 8;
+    buf.write_with(&mut offset, info.fd, LE).unwrap();
+    buf.write_with(&mut offset, info.f0, LE).unwrap();
 
-	buf
+    buf
 }

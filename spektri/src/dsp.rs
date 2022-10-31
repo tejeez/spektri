@@ -20,7 +20,7 @@ pub mod output;
 pub use data::Metadata;
 
 
-// Parameters for signal processing
+/// Parameters for signal processing
 pub struct DspParams {
     pub complex: bool, // Type of input signal: true for I/Q, false for real
     pub fs_in:    f64, // Input sample rate
@@ -34,7 +34,7 @@ pub struct DspParams {
     pub filters: Vec<FilterParams>, // Filter bank parameters
 }
 
-// requirements for the buffers given to DspState::process
+/// Requirements for the buffers given to DspState::process
 pub struct InputBufferSize {
     pub new:     usize, // Number of new samples in each buffer
     pub overlap: usize, // Overlampping samples from previous buffer

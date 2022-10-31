@@ -1,25 +1,23 @@
-/*
- * Spectrum analysis
- *
- * The code here takes FFT results and turns them into
- * spectrum analysis results using the Welch's method.
- *
- * The squared magnitude of each FFT bin is averaged over a number of FFTs.
- * Result of that is then quantized on a logarithmic scale and written
- * into the output file.
- *
- * As a modification from usual Welch's method,
- * the multiplication with a window function before the FFT is replaced
- * by an equivalent circular convolution in frequency domain after the FFT.
- *
- * Normally, this would not be particularly useful, since a convolution
- * requires more multiplications than an equivalent multiplication
- * in the other domain.
- *
- * Here, however, it lets us use a rectangular FFT window, which works
- * better for a fast-convolution filter-bank, allowing the use of the same
- * FFT results for both a filter bank and spectrum analysis.
- */
+//! Spectrum analysis
+//!
+//! The code here takes FFT results and turns them into
+//! spectrum analysis results using the Welch's method.
+//!
+//! The squared magnitude of each FFT bin is averaged over a number of FFTs.
+//! Result of that is then quantized on a logarithmic scale and written
+//! into the output file.
+//!
+//! As a modification from usual Welch's method,
+//! the multiplication with a window function before the FFT is replaced
+//! by an equivalent circular convolution in frequency domain after the FFT.
+//!
+//! Normally, this would not be particularly useful, since a convolution
+//! requires more multiplications than an equivalent multiplication
+//! in the other domain.
+//!
+//! Here, however, it lets us use a rectangular FFT window, which works
+//! better for a fast-convolution filter-bank, allowing the use of the same
+//! FFT results for both a filter bank and spectrum analysis.
 
 use rustfft::num_complex::Complex;
 use zmq;
