@@ -134,7 +134,7 @@ pub fn serialize_spectrum_topic(
 
     buf[0] = PROTOCOL_VERSION;
     buf[1] = MessageType::Spectrum as u8;
-    buf[2] = DataFormat::Cu8 as u8;
+    buf[2] = DataFormat::U8 as u8;
 
     let mut offset = 8;
     buf.write_with(&mut offset, info.fd, LE).unwrap();
