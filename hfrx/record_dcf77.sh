@@ -3,4 +3,4 @@
 
 set -e -x
 DEMODULATE='../tools/demodulate.py ipc:///tmp/spektri.zmq'
-${DEMODULATE} 500000 125000 77500 iq >> ../data/dcf77_$(date +%s).cf32
+${DEMODULATE} 64000 80000 77500 iq >> ../data/dcf77_$(date +%s).cf32

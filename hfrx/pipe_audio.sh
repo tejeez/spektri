@@ -12,6 +12,7 @@ sleep 10
 }
 
 # FT-8 frequencies for a few amateur radio bands
+# TODO: fix filter bank output frequencies, add them to hfrx1.sh if needed
 demod 500000 3625000 3573000 &
 demod 500000 7125000 7074000 &
 demod 500000 14125000 14074000 &

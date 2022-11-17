@@ -1,11 +1,11 @@
 #!/bin/sh
 # HF spectrum analyzer for RX888
 
-FFTSIZE=16384
-SAMPLERATE=128000000
+FFTSIZE=65536
+SAMPLERATE=131072000
 # Sample rate requested from the receiver. It may differ from
 # the nominal sample rate above if frequency calibration is needed.
-SAMPLERATE_R=127997610
+SAMPLERATE_R=131069550
 
 # libsddc repository should be cloned into ../../libsddc
 # and built into ../../libsddc/build
@@ -26,30 +26,31 @@ mkdir -p "${DATA}"
 TASKSET=
 TASKSET2=
 
+# Priorities
+RT=" chrt -r 10"
+RT2=" chrt -r 11"
+
 ../tools/save_to_files.py spectrum "../data/hf_%Y%m%d_%H%M%S_${SAMPLERATE}_${FFTSIZE}_8_T.data" 86400 & PID1=$!
 
 # Put sddc_stream in loop, so that it is restarted if it fails
 (while true; do
- ${TASKSET2} "${LIBSDDC}/build/src/sddc_stream" "${LIBSDDC}/firmware/SDDC_FX3.img" "${SAMPLERATE_R}"
+ ${TASKSET2} ${RT2} "${LIBSDDC}/build/src/sddc_stream" "${LIBSDDC}/firmware/SDDC_FX3.img" "${SAMPLERATE_R}"
 done) \
-| ${TASKSET2} pv \
-| ${TASKSET} ../spektri/target/release/spektri \
+| ${TASKSET2} ${RT2} pv \
+| ${TASKSET} ${RT} ../spektri/target/release/spektri \
 "--inputformat=s16le" \
 "--samplerate=${SAMPLERATE}" \
 "--centerfreq=0" \
 "--fftsize=${FFTSIZE}" \
 "--spectrumformat=u8" \
-"--averages=100000" \
+"--averages=24000" \
 "--filters" \
- "fs=500000:fc=125000" \
- "fs=500000:fc=1875000" \
- "fs=500000:fc=3625000" \
- "fs=250000:fc=4625000" \
- "fs=500000:fc=7125000" \
- "fs=500000:fc=10125000" \
- "fs=500000:fc=14125000" \
- "fs=500000:fc=28125000" \
- "fs=500000:fc=50250000" \
+ "fs=64000:fc=80000" \
+ "fs=64000:fc=1848000" \
+ "fs=64000:fc=3696000" \
+ "fs=64000:fc=4624000" \
+ "fs=64000:fc=7056000" \
+ "fs=64000:fc=14264000" \
 >/dev/null
 
 kill $PID1
