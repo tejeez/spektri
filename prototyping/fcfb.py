@@ -9,6 +9,7 @@ non-rectangular windows."""
 import math
 
 import numpy as np
+from scipy import signal
 
 _REAL = np.float32    # numpy dtype used for real numbers
 _COMPLEX = np.complex64   # numpy dtype used for complex numbers
@@ -70,6 +71,9 @@ def fcfb(input, freq, prewindow, weights, postwindow, overlap):
                 mode='wrap'
             ) * weights
         )) * postwindow
+        # Numpy apparently normalizes IFFT results but we don't want that
+        # since our input FFT window is normalized already. Undo normalization.
+        o *= ifft_size
 
         # Add the overlapping part from previous results
         if oo is not None:
@@ -83,53 +87,45 @@ def fcfb(input, freq, prewindow, weights, postwindow, overlap):
     return np.concatenate(outputs)
 
 
-def zprect(l,n,t=0):
-    """Return a zero-padded rectangular window
-    having a total length of l, n ones in the middle
-    and zero-padding at both ends.
-
-    Taper each transition by t samples by convolving the result
-    with a smoothing window.
+def zptukey(l,n,t=0):
+    """Return a zero-padded rectangular or Tukey window.
+    The window has:
+    * Total length of l
+    * n non-zero bins in the middle
+    * t bins of taper. If zero, make a rectangular window.
     """
     w = np.zeros(l, dtype=_REAL)
-    w[(l-n) // 2 : (l+n) // 2] = np.ones(n, dtype=_REAL)
-    if t >= 1:
-        s = np.hanning(t)
-        s = s / np.sum(s) # Normalize scaling
-        w = np.convolve(w, s, mode='same')
+    w[(l-n) // 2 : (l+n) // 2] = signal.windows.tukey(n+2, (t+1)*2/(n+1))[1:-1]
     return w
 
-def normalize_window(w):
-    """Normalize the sum over a window to 1.
-    This results in nicely scaled FFT result values."""
-    return w / np.sum(w)
-
-def fcfb_design(method='overlap_add', taper=0):
+def fcfb_design(method='overlap-add', taper=0, ifft_size=32, transition=16, shape='raisedcosine'):
     """Design the parameters for a fast-convolution filter bank.
 
     Return the parameters as a dict that can be passed
     to fcfb function using **."""
     fft_size = 256
-    ifft_size = 16
     overlap = 0.25
-    if method == 'overlap_add':
+    if method == 'overlap-add':
         # Overlap-and-add: zero-padded prewindow, all-ones postwindow
-        prewindow = zprect(fft_size, int(round(fft_size * (1-overlap))), taper)
+        prewindow = zptukey(fft_size, int(round(fft_size * (1-overlap) + taper)), taper)
         postwindow = np.ones(ifft_size, dtype=_REAL)
-    elif method == 'overlap_save':
+    elif method == 'overlap-save':
         # Overlap-and-save: all-ones prewindow, zero-padded postwindow
         #prewindow = np.ones(fft_size, dtype=_REAL)
-        prewindow = zprect(fft_size, fft_size-taper, taper)
-        postwindow = zprect(ifft_size, int(round(ifft_size * (1-overlap))))
+        prewindow = zptukey(fft_size, fft_size, taper)
+        postwindow = zptukey(ifft_size, int(round(ifft_size * (1-overlap))))
+    print(prewindow)
 
     # Make the weights symmetric around zero frequency.
     # Set the weight of the single bin at Nyquist frequency to zero.
-    # Raised cosine filter:
-    halfweights = 0.5+0.5*np.cos(np.linspace(0, math.pi, ifft_size//2, endpoint=False, dtype=_REAL))
-    weights = np.concatenate(([0], halfweights[:0:-1], halfweights))
+    if shape == 'raisedcosine':
+        weights = signal.windows.tukey(ifft_size, 2.0*transition/ifft_size, sym=False)
+    else:
+        raise ValueError()
+    print(weights)
 
     return {
-        'prewindow': normalize_window(prewindow),
+        'prewindow': prewindow * (1.0/fft_size), # normalize
         'weights': weights,
         'postwindow': postwindow,
         'overlap': overlap
@@ -151,26 +147,57 @@ def power_db(s):
 def test():
     import matplotlib.pyplot as plt
 
-    freqs = np.linspace(-np.pi, np.pi, 2**11+1)
+    freqs = np.linspace(-0.5, 0.5, 2**12+1)
 
-    def plot_test(method, taper):
-        params = fcfb_design(method=method, taper=taper)
+    def plot_test(method, taper, ifft_size, transition):
+        params = fcfb_design(method=method, taper=taper, ifft_size=ifft_size, transition=transition)
         # Test the filter with different input frequencies.
         # Let's start with a simple test
         # and just plot the total output power.
         # Discard some first samples of the result to let the output settle.
-        results = [power_db(fcfb(complex_sine(f, 2**12), 50, **params)[32:]) for f in freqs]
+        results = [power_db(fcfb(complex_sine(f, 2**12), 0, **params)[ifft_size*2:]) for f in (freqs*(math.pi*2))]
         plt.plot(freqs, results)
 
-    legends = []
-    for method in ['overlap_add', 'overlap_save']:
-        for taper in [0, 8, 32]:
-            plot_test(method, taper)
-            legends.append("%s, taper=%d" % (method, taper))
-    plt.xlabel('Input frequency (radian/s)')
-    plt.ylabel('Output power (dB)')
-    plt.legend(legends)
-    plt.grid()
+    def figure():
+        "Common code for all figures"
+        plt.figure()
+        plt.xlabel('Input frequency (1/sample rate)')
+        plt.ylabel('Output power (dB)')
+        plt.xlim([-0.5, 0.5])
+        plt.ylim([-120, 3])
+        plt.grid()
+
+    def plot_oa_vs_os(ifft_size=32, taper=0):
+        "Comparison of overlap-add and overlap-save methods"
+        figure()
+        legends = list()
+        for method in ['overlap-save', 'overlap-add']:
+            plot_test(method, taper, ifft_size, ifft_size//2)
+            legends.append("%s" % (method, ))
+        plt.legend(legends)
+
+    def plot_weights(taper=0, method='overlap-save'):
+        "Effect of IFFT size and transition band width"
+        figure()
+        legends = list()
+        for ifft_size, transition in ((32, 16), (64, 16), (64, 32), (128, 16), (128, 64)):
+            plot_test(method, taper, ifft_size, transition)
+            legends.append("IFFT size=%d, transition band %d bins" % (ifft_size, transition))
+        plt.legend(legends)
+
+    def plot_taper():
+        "Effect of input window tapering"
+        figure()
+        legends = list()
+        for method in ('overlap-save', 'overlap-add'):
+            for taper in (0, 32):
+                plot_test(method, taper, 32, 8)
+                legends.append("%s, taper %d samples" % (method, taper))
+        plt.legend(legends)
+
+    plot_weights()
+    plot_oa_vs_os()
+    plot_taper()
     plt.show()
 
 if __name__ == '__main__':
