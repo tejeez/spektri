@@ -10,6 +10,11 @@ from fractions import Fraction
 import numpy as np
 import numba as nb
 from scipy import signal
+try:
+    from numba.experimental import jitclass
+except ImportError:
+    # Older versions of numba
+    from numba import jitclass
 
 
 @nb.njit
@@ -30,7 +35,7 @@ def _sinewave(num, den):
     return np.cos(phase) + np.sin(phase) * nb.complex64(1j)
 
 
-@nb.jitclass([
+@jitclass([
     ('taps', nb.float32[:]),
     ('interpolation', nb.uint32),
     ('decimation', nb.uint32),
@@ -185,7 +190,7 @@ def test(fs_in = 1000, fs_out = 300, fc = 150):
 
     Read signal from stdin, mix and resample it and write the result to stdout.
     Test by running:
-    ../testsignal/target/release/testsignal complex 1000000 | ./ddc.py t > ../data/ddc_test
+    ../testsignal/target/release/testsignal --format=cf32le --samples=1000000 | ./ddc.py t > ../data/ddc_test
 
     and check the result using, for example, Audacity.
     """
@@ -196,7 +201,7 @@ def test(fs_in = 1000, fs_out = 300, fc = 150):
     while True:
         r = sys.stdin.buffer.read(4096)
         if len(r) == 0: break
-        signalin = np.frombuffer(r, dtype='int16').astype('float32').view('complex64') * (2.0**-15)
+        signalin = np.frombuffer(r, dtype='float32').view('complex64')
         signalout = ddc.execute(signalin)
         sys.stdout.buffer.write(signalout.tobytes())
 

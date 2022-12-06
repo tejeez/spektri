@@ -4,11 +4,16 @@
 import numpy as np
 import numba as nb
 from scipy import signal
+try:
+    from numba.experimental import jitclass
+except ImportError:
+    # Older versions of numba
+    from numba import jitclass
 
 import ddc
 
 
-@nb.jitclass([
+@jitclass([
     ('pa', nb.float32),
 ])
 class SsbAgc:
@@ -57,7 +62,7 @@ class SsbAgc:
         return output
 
 
-@nb.jitclass([
+@jitclass([
     ('pa', nb.float32),
 ])
 class AmAgc:
@@ -196,7 +201,7 @@ def test(fs_in=125000, fc_in=3625000, fc_demod=3699000, mode='lsb'):
 
     Read signal from stdin, mix and resample it and write the result to stdout.
     Test by running:
-    ../testsignal/target/release/testsignal complex 10000000 | ./demodulator.py t > ../data/demod_test
+    ../testsignal/target/release/testsignal --format=cf32le --samples=10000000 | ./demodulator.py t > ../data/demod_test
 
     and check the result using, for example, Audacity.
     """
@@ -206,7 +211,7 @@ def test(fs_in=125000, fc_in=3625000, fc_demod=3699000, mode='lsb'):
     while True:
         r = sys.stdin.buffer.read(4096)
         if len(r) == 0: break
-        signalin = np.frombuffer(r, dtype='int16').astype('float32').view('complex64') * (2.0**-15)
+        signalin = np.frombuffer(r, dtype='float32').view('complex64')
         signalout = demod.execute(signalin)
         sys.stdout.buffer.write(signalout.tobytes())
 
