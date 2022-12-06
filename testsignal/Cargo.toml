@@ -1,6 +1,6 @@
 [package]
 name = "testsignal"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Tatu Peltola"]
 edition = "2018"
 license = "MIT"
@@ -9,3 +9,4 @@ license = "MIT"
 
 [dependencies]
 byte = "0.2"
+clap = "2.33.3"
