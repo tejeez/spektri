@@ -2,6 +2,7 @@
 """Python module to receive data from Spektri."""
 
 import struct
+from dataclasses import dataclass
 
 import numpy as np
 import zmq
@@ -28,6 +29,19 @@ def spectrum_topic():
     return bytes((2, 0x60, 0x24, 0,0,0,0,0))
 
 
+@dataclass
+class Metadata:
+    """Metadata of a measurement record."""
+    seq: int      # Sequence number
+    time_s: int   # System time, integer part in seconds
+    time_ns: int  # System time, fractional part in nanoseconds
+
+def unpack_metadata(msg):
+    """Deserialize metadata of a measurement record."""
+    seq, time_s, time_ns = struct.unpack("<QQI", msg[0:20])
+    return Metadata(seq=seq, time_s=time_s, time_ns=time_ns)
+
+
 def recv_signal(fs, fc, address=DEFAULT_ADDRESS, zctx=zctx):
     """Receive waveform data from Spektri."""
 
@@ -38,8 +52,7 @@ def recv_signal(fs, fc, address=DEFAULT_ADDRESS, zctx=zctx):
     s.connect(address)
     while True:
         _, msg = s.recv_multipart()
-        # TODO: return metadata too. None is placeholder for that now
-        yield (None, np.frombuffer(msg[24:], dtype=np.complex64))
+        yield (unpack_metadata(msg), np.frombuffer(msg[24:], dtype=np.complex64))
 
 
 def recv_spectrum(fs, fc, address=DEFAULT_ADDRESS, zctx=zctx):
@@ -53,4 +66,4 @@ def recv_spectrum(fs, fc, address=DEFAULT_ADDRESS, zctx=zctx):
     while True:
         _, msg = s.recv_multipart()
         # TODO: return metadata too. None is placeholder for that now
-        yield (None, np.frombuffer(msg[24:], dtype=np.complex64))
+        yield (unpack_metadata(msg), np.frombuffer(msg[24:], dtype=np.complex64))

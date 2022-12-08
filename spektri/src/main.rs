@@ -123,6 +123,9 @@ fn mainloop_complex(
     // buffer for type converted data with overlap
     let mut buf: Vec<Complex<f32>> = vec![Complex{re:0.0,im:0.0}; bufsize.total ];
 
+    // sequence number of the processing block
+    let mut seq: u64 = 0;
+
     let mut input = std::io::stdin();
     'mainloop: loop {
         // copy the overlapping part to beginning of the buffer
@@ -137,10 +140,13 @@ fn mainloop_complex(
         convert_to_cf32(&rawbuf, &mut buf[bufsize.overlap .. bufsize.total], fmt);
 
         let metadata = dsp::Metadata {
+            seq: seq,
             systemtime: systemtime,
         };
 
         dsp.process_complex(&buf, &metadata, &sock)?;
+
+        seq += 1;
     }
     Ok(())
 }
@@ -158,6 +164,9 @@ fn mainloop_real(
     // buffer for type converted data with overlap
     let mut buf: Vec<f32> = vec![0.0; bufsize.total];
 
+    // sequence number of the processing block
+    let mut seq: u64 = 0;
+
     let mut input = std::io::stdin();
     'mainloop: loop {
         // copy the overlapping part to beginning of the buffer
@@ -172,10 +181,13 @@ fn mainloop_real(
         convert_to_f32(&rawbuf, &mut buf[bufsize.overlap .. bufsize.total], fmt);
 
         let metadata = dsp::Metadata {
+            seq: seq,
             systemtime: systemtime,
         };
 
         dsp.process_real(&buf, &metadata, &sock)?;
+
+        seq += 1;
     }
     Ok(())
 }

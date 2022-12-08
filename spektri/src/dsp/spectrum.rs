@@ -32,6 +32,7 @@ arg_enum! { // needed for command line parsing
 }
 
 pub struct SpectrumAccumulator {
+    seq: u64, // Sequence number, number of results produced
     acc: Vec<f32>, // Accumulator for FFT averaging
     accn: u32, // Counter for number of FFTs averaged
     fft_size: usize, // parameter
@@ -48,6 +49,7 @@ impl SpectrumAccumulator {
         outfmt: SpectrumFormat, // Output format for spectrum data
     ) -> Self {
         Self {
+            seq: 0,
             acc: vec![0.0; if complex { fft_size } else { fft_size/2+1 }],
             accn: 0,
             fft_size: fft_size,
@@ -100,16 +102,16 @@ impl SpectrumAccumulator {
             self.accn += 1;
             let averages = self.averages;
             if self.accn >= averages {
-                // Write the result in binary format into stdout
-
                 let outfmt = self.outfmt;
                 let mut outbuf: Vec<u8> = vec![
                     0;
                     100 + // TODO correct size of sample metadata
                     self.acc.len() * match outfmt { SpectrumFormat::U16=>2, SpectrumFormat::U8=>1 }];
                 let mut offset = 0;
-                // TODO sequence numbers
-                serialize_metadata(&mut outbuf, &mut offset, &metadata, 0);
+
+                // unwrap is OK here because it would only panic if outbuf
+                // is too small for metadata. That would clearly be a bug.
+                serialize_metadata(&mut outbuf, &mut offset, &metadata, self.seq).unwrap();
 
                 // divide accumulator bins by self.accn,
                 // but do it as an addition after conversion to dB scale
@@ -121,6 +123,8 @@ impl SpectrumAccumulator {
                         let db = acc_bin.log10() * 10.0 + db_plus;
                         // quantize to 0.05 dB per LSB, full scale at 4000, clamp to 12 bits
                         let o = (db * 20.0 + 4000.0).max(0.0).min(4095.0) as u16;
+                        // This could be changed to little endian for consistency
+                        // but for now fixing the 16-bit format isn't a high priority.
                         out[0] = (o >> 8) as u8;
                         out[1] = (o & 0xFF) as u8;
                         offset += 2; // TODO maybe just use byte crate here as well
@@ -141,6 +145,7 @@ impl SpectrumAccumulator {
                     *acc_bin = 0.0;
                 }
                 self.accn = 0;
+                self.seq += 1;
             }
         }
         Ok(())

@@ -7,21 +7,29 @@ use byte::{BytesExt, LE};
 
 /// Metadata for measurement records or buffers of samples
 pub struct Metadata {
+    /// Sequence number of processing block
+    pub seq: u64,
+    /// System time when processing block was received
     pub systemtime: std::time::SystemTime,
+    // SDR timestamp could be added here as well but it's not implemented at the moment.
 }
 
 
 /// Information about signal data
 pub struct SignalInfo {
-    pub fs: f64, // Sample rate
-    pub fc: f64, // Center frequency
+    /// Sample rate
+    pub fs: f64,
+    /// Center frequency
+    pub fc: f64,
 }
 
 
 /// Information about spectrum data
 pub struct SpectrumInfo {
-    pub fd: f64, // Spacing of bins in frequency
-    pub f0: f64, // Frequency of the first bin
+    /// Spacing of bins in frequency
+    pub fd: f64,
+    /// Frequency of the first bin
+    pub f0: f64,
 }
 
 pub enum MessageType {
@@ -80,6 +88,11 @@ const PROTOCOL_VERSION: u8 = 2;
 /// Serialize metadata for a single measurement record.
 /// The serialized metadata is placed in the beginning of each record
 /// of signal or spectrum data.
+///
+/// Sequence number is taken as a separate parameter instead of
+/// using metadata.seq because for some cases (spectrum data)
+/// the sequence number of a measurement record is not the same
+/// as the sequence number of a processing block.
 pub fn serialize_metadata(
     buf: &mut [u8],
     offset: &mut usize,

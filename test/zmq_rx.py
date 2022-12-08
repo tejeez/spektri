@@ -28,9 +28,19 @@ def main(fs = 32000, fc = 0, filename = "data/test", address = "ipc:///tmp/spekt
 
     output_file = open(filename, "wb")
 
+    # Which sequnce number is expected next
+    next_seq = 0
+
     while True:
         topic, msg = s.recv_multipart()
         assert topic == sub_topic
+
+        # Test sequence numbers
+        metadata = spektri.unpack_metadata(msg)
+        if metadata.seq != next_seq:
+            print(f"Lost messages? Expected sequence number {next_seq}, received {metadata.seq}")
+        next_seq = (metadata.seq + 1) & (2**64-1)
+
         # Write data to a file
         #output_file.write(msg)
         # Write only the signal without the timestamps etc

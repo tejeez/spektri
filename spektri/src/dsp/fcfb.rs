@@ -81,8 +81,15 @@ impl Fcfb {
         // Process multiple filters in parallel
         self.filters.par_iter_mut().for_each( |filter| {
             let mut offset = 0;
-            // TODO sample sequence numbers
-            serialize_metadata(&mut filter.outbuf, &mut offset, &metadata, 0);
+            // Sequence number of can be the same as metadata.seq because
+            // one record is produced for each processing block.
+            // This also results in common sequence numbering for all filters
+            // which is convenient for applications requiring
+            // synchronized signals from multiple filters.
+            //
+            // unwrap is OK here because it would only panic if outbuf
+            // is too small for metadata. That would clearly be a bug.
+            serialize_metadata(&mut filter.outbuf, &mut offset, &metadata, metadata.seq).unwrap();
             for fft_result in fft_results.iter() {
                 if filter.dsp.done { break; }
                 filter.dsp.process(fft_result, &mut filter.outbuf, &mut offset);
@@ -180,8 +187,11 @@ impl FilterDsp {
         // Write result to output buffer
         use byte::*;
         for v in result.into_iter() {
-            outbuf.write_with(outbuf_offset, v.re, LE);
-            outbuf.write_with(outbuf_offset, v.im, LE);
+            // unwrap will panic if outbuf is too small.
+            // This may actually happen because the buffer size
+            // is not properly calculated yet.
+            outbuf.write_with(outbuf_offset, v.re, LE).unwrap();
+            outbuf.write_with(outbuf_offset, v.im, LE).unwrap();
         }
     }
 }
