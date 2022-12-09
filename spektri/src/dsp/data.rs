@@ -15,6 +15,20 @@ pub struct Metadata {
 }
 
 
+/// Information about FFT results
+#[derive(Copy, Clone)]
+pub struct FftInfo {
+    /// Input sample rate
+    pub fs:      f64,
+    /// Input center frequency
+    pub fc:      f64,
+    /// FFT size
+    pub size:    usize,
+    /// Is the input signal real (false) or complex (true)
+    pub complex: bool,
+}
+
+
 /// Information about signal data
 pub struct SignalInfo {
     /// Sample rate

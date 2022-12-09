@@ -16,9 +16,7 @@ use super::Metadata;
 
 /// Bank of filters
 pub struct Fcfb {
-    fs_in:    f64,   // Input sample rate
-    fc_in:    f64,   // Input center frequency
-    fft_size: usize, // Input FFT size
+    fft_info: FftInfo,
     filters: Vec<Filter>,
 }
 
@@ -32,16 +30,10 @@ pub struct Filter {
 
 impl Fcfb {
     pub fn init(
-        fft_size: usize,
-        fs_in:    f64,
-        fc_in:    f64,
+        fft_info: FftInfo,
     ) -> Self {
-        // hmm... fs_in, fc_in and fft_size are passed around in a lot of places,
-        // so would it make sense to put them all in one struct?
         Self {
-            fs_in:    fs_in,
-            fc_in:    fc_in,
-            fft_size: fft_size,
+            fft_info: fft_info,
             filters: Vec::new(),
         }
     }
@@ -51,8 +43,8 @@ impl Fcfb {
         p: &FilterParams,
     )
     {
-        if let Some(bn) = freq_to_bins_exact(self.fft_size, self.fs_in, self.fc_in, p.fs_out, p.fc_out) {
-            match FilterDsp::init(self.fft_size, bn) {
+        if let Some(bn) = freq_to_bins_exact(self.fft_info, p.fs_out, p.fc_out) {
+            match FilterDsp::init(self.fft_info.size, bn) {
                 Ok(filter) => self.filters.push(Filter {
                     dsp: filter,
                     // TODO: calculate sufficient size for the output buffer
@@ -118,8 +110,8 @@ impl Fcfb {
         fs_out: f64,
         fc_out: f64,
     ) -> Option<(f64, f64)> {
-        let bn = freq_to_bins(self.fft_size, self.fs_in, self.fc_in, fs_out, fc_out)?;
-        Some(bins_to_freq(self.fft_size, self.fs_in, self.fc_in, bn))
+        let bn = freq_to_bins(self.fft_info, fs_out, fc_out)?;
+        Some(bins_to_freq(self.fft_info, bn))
     }
 }
 
@@ -231,9 +223,7 @@ pub struct BinNumbers {
 /// To get the exact frequency values, use bins_to_freq
 /// to convert the numbers back to frequencies.
 pub fn freq_to_bins(
-    fft_size: usize, // Input FFT size
-    fs_in:    f64,   // Input sample rate
-    fc_in:    f64,   // Input center frequency
+    fft_info: FftInfo,
     fs_out:   f64,   // Filtered sample rate
     fc_out:   f64,   // Filtered center frequency
 ) -> Option<BinNumbers> {
@@ -244,12 +234,12 @@ pub fn freq_to_bins(
         ((value / (multiple as f64)).round() * (multiple as f64)) as isize
     }
 
-    let bin_spacing = fs_in / (fft_size as f64);
+    let bin_spacing = fft_info.fs / (fft_info.size as f64);
 
     // IFFT size
     let bins = nearest_multiple(fs_out / bin_spacing, multiple);
     // Center bin number
-    let center = nearest_multiple((fc_out - fc_in) / bin_spacing, multiple);
+    let center = nearest_multiple((fc_out - fft_info.fc) / bin_spacing, multiple);
 
     if bins > 0 { // TODO: other validity checks?
         Some(BinNumbers {
@@ -265,17 +255,15 @@ pub fn freq_to_bins(
 ///
 /// Return a tuple of the output sample rate and output center frequency.
 pub fn bins_to_freq(
-    fft_size: usize, // Input FFT size
-    fs_in:    f64,   // Input sample rate
-    fc_in:    f64,   // Input center frequency
+    fft_info: FftInfo,
     bn:       BinNumbers,
 ) -> (f64, f64) {
-    let bin_spacing = fs_in / (fft_size as f64);
+    let bin_spacing = fft_info.fs / (fft_info.size as f64);
     (
         // Output sample rate
         bin_spacing * (bn.bins as f64),
         // Output center frequency
-        fc_in + bin_spacing * ((bn.first + (bn.bins/2) as isize) as f64)
+        fft_info.fc + bin_spacing * ((bn.first + (bn.bins/2) as isize) as f64)
     )
 }
 
@@ -284,14 +272,12 @@ pub fn bins_to_freq(
 /// Only accept frequency values that can be done exactly.
 /// Return none if the values would be impossible.
 pub fn freq_to_bins_exact(
-    fft_size: usize, // Input FFT size
-    fs_in:    f64,   // Input sample rate
-    fc_in:    f64,   // Input center frequency
+    fft_info: FftInfo,
     fs_out:   f64,   // Filtered sample rate
     fc_out:   f64,   // Filtered center frequency
 ) -> Option<BinNumbers> {
-    let bn = freq_to_bins(fft_size, fs_in, fc_in, fs_out, fc_out)?;
-    if bins_to_freq(fft_size, fs_in, fc_in, bn) == (fs_out, fc_out) {
+    let bn = freq_to_bins(fft_info, fs_out, fc_out)?;
+    if bins_to_freq(fft_info, bn) == (fs_out, fc_out) {
         Some(bn)
     } else {
         None
@@ -311,10 +297,11 @@ fn test_freq_to_bins() {
         first:    isize, // Expected result
         should_be_exact: bool,
     ) {
-        let bn = freq_to_bins(fft_size, fs_in, fc_in, fs_out, fc_out).unwrap();
+        let fft_info = FftInfo { fs: fs_in, fc: fc_in, size: fft_size, complex: true };
+        let bn = freq_to_bins(fft_info, fs_out, fc_out).unwrap();
         assert!(bn.bins == bins);
         assert!(bn.first == first);
-        let (fs_out_exact, fc_out_exact) = bins_to_freq(fft_size, fs_in, fc_in, bn);
+        let (fs_out_exact, fc_out_exact) = bins_to_freq(fft_info, bn);
         if should_be_exact {
             assert!(fs_out_exact == fs_out);
             assert!(fc_out_exact == fc_out);

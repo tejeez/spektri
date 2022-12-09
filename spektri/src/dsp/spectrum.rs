@@ -32,27 +32,34 @@ arg_enum! { // needed for command line parsing
 }
 
 pub struct SpectrumAccumulator {
-    seq: u64, // Sequence number, number of results produced
-    acc: Vec<f32>, // Accumulator for FFT averaging
-    accn: u32, // Counter for number of FFTs averaged
-    fft_size: usize, // parameter
-    averages: u32, // parameter
-    outfmt: SpectrumFormat, // parameter
+    /// Sequence number, number of results produced
+    seq: u64,
+    /// Accumulator for FFT averaging
+    acc: Vec<f32>,
+    /// Counter for number of FFTs averaged
+    accn: u32,
+
+    /// Parameter: information about FFT results
+    fft_info: FftInfo,
+    /// Parameter: Number of FFTs averaged
+    averages: u32,
+    /// Parameter: Output format for spectrum data
+    outfmt: SpectrumFormat,
     output: Output,
 }
 
 impl SpectrumAccumulator {
     pub fn init(
-        fft_size: usize,
-        complex: bool, // is the input to FFT complex
+        fft_info: FftInfo,
         averages: u32, // Number of FFTs averaged
         outfmt: SpectrumFormat, // Output format for spectrum data
     ) -> Self {
         Self {
             seq: 0,
-            acc: vec![0.0; if complex { fft_size } else { fft_size/2+1 }],
+            // TODO: consider calculating number of FFT bins somewhere in one place.
+            acc: vec![0.0; if fft_info.complex { fft_info.size } else { fft_info.size/2+1 }],
             accn: 0,
-            fft_size: fft_size,
+            fft_info: fft_info,
             averages: averages,
             outfmt: outfmt,
             output: Output::init(
@@ -61,8 +68,11 @@ impl SpectrumAccumulator {
                     filename: Some("/dev/stdout".to_string()),
                 },
                 &serialize_spectrum_topic(&SpectrumInfo {
-                    f0: 0.0,
-                    fd: 0.0, // TODO
+                    // TODO: implement "FFT shifting" when the input signal is complex.
+                    // Fix f0 for that case.
+                    f0: fft_info.fc,
+                    // TODO: consider calculating spacing of FFT bins somewhere in one place.
+                    fd: fft_info.fs / fft_info.fs,
                 })),
         }
     }
@@ -81,7 +91,7 @@ impl SpectrumAccumulator {
             // where modulo indexing needs to be handled in a special way.
 
             // Special cases of first and last bins
-            let fft_size = self.fft_size;
+            let fft_size = self.fft_info.size;
             let getbin = |i: isize| get_bin(fft_result, fft_size, i);
             for &i in [ 0, self.acc.len()-1 ].iter() {
                 let c = getbin(i as isize)

@@ -17,7 +17,7 @@ pub mod data;
 pub mod fftutil;
 pub mod output;
 
-pub use data::Metadata;
+pub use data::{Metadata, FftInfo};
 
 
 /// Parameters for signal processing
@@ -42,9 +42,7 @@ pub struct InputBufferSize {
 }
 
 pub struct DspState {
-    //fs_in:        f64,
-    //fc_in:        f64,
-    fft_size:     usize,
+    fft_info:     FftInfo,
     ffts_per_buf: usize,
     fft_interval: usize,
 
@@ -79,18 +77,22 @@ impl DspState {
         let fft_overlap = params.fft_size / 4; // 25% overlap
         let fft_interval = params.fft_size - fft_overlap; // FFT is taken every fft_interval samples
         let result_bins = if params.complex { params.fft_size } else { params.fft_size / 2 + 1 };
+        let fft_info = FftInfo {
+            fs:      params.fs_in,
+            fc:      params.fc_in,
+            size:    params.fft_size,
+            complex: params.complex,
+        };
 
         (DspState {
-            //fs_in:        params.fs_in,
-            //fc_in:        params.fc_in,
-            fft_size:     params.fft_size,
+            fft_info:     fft_info,
             ffts_per_buf: params.ffts_per_buf,
             fft_interval: fft_interval,
 
             mfft: MultiFft::init(params.fft_size),
-            accu: SpectrumAccumulator::init(params.fft_size, params.complex, params.spectrum_averages, params.spectrum_format),
+            accu: SpectrumAccumulator::init(fft_info, params.spectrum_averages, params.spectrum_format),
             fb: {
-                let mut fb = Fcfb::init(params.fft_size, params.fs_in, params.fc_in);
+                let mut fb = Fcfb::init(fft_info);
                 for f in params.filters.iter() {
                     fb.add_filter(f);
                 }
@@ -116,7 +118,7 @@ impl DspState {
         sock: &zmq::Socket,
     ) -> std::io::Result<()> {
         let fft_interval = self.fft_interval;
-        let fft_size = self.fft_size;
+        let fft_size = self.fft_info.size;
 
         // Buffers for FFT results
         let mut resultbufs: Vec<&mut [Complex<f32>]> = self.fft_result_buf.chunks_mut(fft_size).collect();
@@ -140,7 +142,7 @@ impl DspState {
         sock: &zmq::Socket,
     ) -> std::io::Result<()> {
         let fft_interval = self.fft_interval;
-        let fft_size = self.fft_size;
+        let fft_size = self.fft_info.size;
 
         // Buffers for FFT results
         let mut resultbufs: Vec<&mut [Complex<f32>]> = self.fft_result_buf.chunks_mut(fft_size/2+1).collect();
