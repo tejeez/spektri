@@ -54,6 +54,14 @@ impl SpectrumAccumulator {
         averages: u32, // Number of FFTs averaged
         outfmt: SpectrumFormat, // Output format for spectrum data
     ) -> Self {
+        let spectrum_info = SpectrumInfo {
+            // TODO: implement "FFT shifting" when the input signal is complex.
+            // Fix f0 for that case.
+            f0: fft_info.fc,
+            // TODO: consider calculating spacing of FFT bins somewhere in one place.
+            fd: fft_info.fs / (fft_info.size as f64),
+        };
+
         Self {
             seq: 0,
             // TODO: consider calculating number of FFT bins somewhere in one place.
@@ -67,13 +75,7 @@ impl SpectrumAccumulator {
                     // Temporary hack for compatibility with old test scripts:
                     filename: Some("/dev/stdout".to_string()),
                 },
-                &serialize_spectrum_topic(&SpectrumInfo {
-                    // TODO: implement "FFT shifting" when the input signal is complex.
-                    // Fix f0 for that case.
-                    f0: fft_info.fc,
-                    // TODO: consider calculating spacing of FFT bins somewhere in one place.
-                    fd: fft_info.fs / fft_info.fs,
-                })),
+                &serialize_spectrum_topic(&spectrum_info)),
         }
     }
 
