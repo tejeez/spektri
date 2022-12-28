@@ -50,5 +50,7 @@ if __name__ == "__main__":
     import sys
     if len(sys.argv) == 4:
         main(fs = float(sys.argv[1]), fc = float(sys.argv[2]), filename = sys.argv[3])
+    if len(sys.argv) == 5:
+        main(fs = float(sys.argv[1]), fc = float(sys.argv[2]), filename = sys.argv[3], address = sys.argv[4])
     else:
         main()

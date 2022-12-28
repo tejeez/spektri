@@ -69,5 +69,7 @@ if __name__ == "__main__":
         # TODO: use argv[1] to select which data to save.
         # Now it only uses the default value.
         main(filename_fmt = sys.argv[2], file_interval = int(sys.argv[3]))
+    elif len(sys.argv) == 5:
+        main(filename_fmt = sys.argv[2], file_interval = int(sys.argv[3]), address = sys.argv[4])
     else:
         main()

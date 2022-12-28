@@ -1,5 +1,10 @@
 #!/bin/bash
 # This is run in the beginning of each test to prepare everything
+
+# https://stackoverflow.com/a/22644006
+trap exit INT TERM
+trap "kill 0" EXIT
+
 set -e -x
 mkdir -p data/
 # Compile the programs
