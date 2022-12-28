@@ -67,5 +67,4 @@ spektri \
     "--zmqbind=$ADDR2" \
     "--samplerate=$FS_PLOT" "--centerfreq=$FC_PLOT" "--inputformat=cf32le" \
     "--fftsize=1024" "--averages=1" \
-    < "data/test_${FS_PLOT}_${FC_PLOT}.cf32" \
     > /dev/null
