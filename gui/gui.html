@@ -1,8 +1,9 @@
-<!DOCTYPE HTML>
+<!DOCTYPE html>
 <html lang="en">
 	<head>
-		<title>Spectrogram viewer</title>
+		<meta http-equiv="content-type" content="text/html; charset=UTF-8">
 		<meta charset="UTF-8">
+		<title>Spectrogram viewer</title>
 		<style>
 			body {
 				margin: 0;
@@ -12,6 +13,7 @@
 				width: 100%;
 				overflow-x: scroll;
 				padding: 0;
+				position: relative;
 			}
 			canvas {
 				margin: 0;
@@ -25,6 +27,20 @@
 			}
 			td.a {
 				width: 10em;
+			}
+			.freq_scale {
+				position: absolute;
+				top: 0px;
+				background-color: #00000080;
+				color: #80ff80;
+				border-left: 1px solid red;
+			}
+			.time_scale {
+				position: absolute;
+				left: 0px;
+				background-color: #00000080;
+				color: #80ff80;
+				border-top: 1px solid red;
 			}
 		</style>
 	</head>
@@ -88,6 +104,7 @@
 
 		/* Various objects */
 		const reader = new FileReader();
+		const canvasdiv = document.getElementById("canvasdiv");
 		const canvas = document.getElementById("canvas");
 		const slider1 = document.getElementById("slider1");
 		const slider2 = document.getElementById("slider2");
@@ -144,7 +161,7 @@
 			imgdata = new Uint32Array(img.data.buffer);
 		}
 
-		set_canvas_size(1350, 500);
+		set_canvas_size(1280, 800);
 
 		/* Calculate relevant parameters based on FFT size and sample rate */
 		function set_data_parameters(fftsize, fs) {
@@ -227,6 +244,7 @@
 			}
 
 			update_colors();
+			update_scale();
 		}
 
 		/*
@@ -275,23 +293,66 @@
 			return n;
 		}
 
+		// Get time at a given y axis position in the canvas.
+		function time_at(y) {
+			const fy_offset = Math.round(slider3.value);
+			const fy = fy_offset + Math.floor(y * zoomy);
+			t_s  = read_le(view, record_bytes * fy + 0, 8);
+			t_ns = read_le(view, record_bytes * fy + 8, 4);
+			return new Date(1e3 * t_s + 1e-6 * t_ns);
+		}
+
+		// Get frequency at a given x axis position in the canvas.
+		function freq_at(x) {
+			return pixel0_khz + pixel_khz * x;
+		}
+
+		function format_time_short(t) {
+			return t.toUTCString().substr(-12,8);
+		}
+
+		var freq_scale = [];
+		var time_scale = [];
+
+		function create_scale() {
+			for (let x = 0; x < canvasw; x += 100) {
+				let e = document.createElement("span");
+				e.className = "freq_scale";
+				e.style.left = "" + x + "px";
+				canvasdiv.appendChild(e);
+				freq_scale.push([x, e]);
+			}
+			for (let y = 25; y < canvash; y += 50) {
+				let e = document.createElement("span");
+				e.className = "time_scale";
+				e.style.top = "" + y + "px";
+				canvasdiv.appendChild(e);
+				time_scale.push([y, e]);
+			}
+		}
+
+		function update_scale() {
+			for (const e of freq_scale) {
+				e[1].innerText = "" + freq_at(e[0]).toFixed(0) + " kHz";
+			}
+			for (const e of time_scale) {
+				e[1].innerText = format_time_short(time_at(e[0]));
+			}
+		}
+
 		/*
 		 * Info field.
 		 */
 		function update_info(ev) {
 			let t = "";
 			if (has_time) {
-				const y = Math.round(ev.offsetY);
-				const fy_offset = Math.round(slider3.value);
-				const fy = fy_offset + Math.floor(y * zoomy);
-				t_s  = read_le(view, record_bytes * fy + 0, 8);
-				t_ns = read_le(view, record_bytes * fy + 8, 4);
-				t = ", " + (new Date(1e3 * t_s + 1e-6 * t_ns).toUTCString());
+				t = ", " + time_at(ev.offsetY).toUTCString();
 			}
-			info.innerText = "" + (pixel0_khz + pixel_khz * ev.offsetX).toFixed(1) + " kHz" + t;
+			info.innerText = "" + freq_at(ev.offsetX).toFixed(1) + " kHz" + t;
 		}
 		canvas.addEventListener("mousemove", update_info);
 
+		create_scale();
 		update_zoom();
 	</script>
 	</body>
